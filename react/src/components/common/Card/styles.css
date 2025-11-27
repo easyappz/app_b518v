@@ -1,0 +1,38 @@
+.card {
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(34, 211, 238, 0.1);
+  border-radius: 16px;
+  padding: 24px;
+  transition: all 0.3s ease;
+}
+
+.card-glow {
+  box-shadow: 0 4px 20px rgba(34, 211, 238, 0.1);
+}
+
+.card-glow:hover {
+  box-shadow: 0 8px 30px rgba(34, 211, 238, 0.2);
+  border-color: rgba(34, 211, 238, 0.3);
+}
+
+.card-clickable {
+  cursor: pointer;
+}
+
+.card-clickable:hover {
+  transform: translateY(-4px);
+  border-color: rgba(34, 211, 238, 0.3);
+}
+
+.card-clickable:active {
+  transform: translateY(-2px);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .card {
+    padding: 16px;
+    border-radius: 12px;
+  }
+}

@@ -5,6 +5,8 @@ from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from django.utils import timezone
 from django.contrib.sessions.models import Session
+from django.db import transaction as db_transaction
+from django.db.models import Count, Q
 from drf_spectacular.utils import extend_schema
 import hashlib
 import hmac
@@ -15,9 +17,40 @@ from .serializers import (
     TelegramAuthSerializer,
     MemberSerializer,
     MemberStatsSerializer,
-    MemberUpdateSerializer
+    MemberUpdateSerializer,
+    UserRegisterSerializer,
+    ReferralSerializer,
+    ReferralTreeSerializer,
+    TransactionSerializer
 )
-from .models import Member, Transaction
+from .models import Member, Transaction, ReferralRelation, Notification
+
+# Constants for bonus calculation
+PLAYER_DIRECT_BONUS = 1000  # V-Coins
+INFLUENCER_DIRECT_BONUS = 500  # Rubles
+
+RANK_THRESHOLDS = {
+    'standard': 0,
+    'silver': 5,
+    'gold': 20,
+    'platinum': 50
+}
+
+DEPTH_BONUSES_PLAYER = {
+    'standard': 100,
+    'silver': 150,
+    'gold': 200,
+    'platinum': 250
+}
+
+DEPTH_BONUSES_INFLUENCER = {
+    'standard': 50,
+    'silver': 75,
+    'gold': 100,
+    'platinum': 125
+}
+
+MAX_REFERRAL_DEPTH = 10
 
 
 class CookieAuthentication(BaseAuthentication):
@@ -58,6 +91,94 @@ class CookieAuthentication(BaseAuthentication):
     
     def authenticate_header(self, request):
         return 'Cookie'
+
+
+def build_referral_chain(new_user, referrer):
+    """
+    Build referral chain up to 10 levels
+    Creates ReferralRelation entries for all ancestors
+    """
+    if not referrer:
+        return
+    
+    # Check for circular reference
+    if new_user.id == referrer.id:
+        return
+    
+    # Get all ancestors of the referrer
+    ancestor_relations = ReferralRelation.objects.filter(
+        descendant=referrer,
+        level__lt=MAX_REFERRAL_DEPTH
+    ).select_related('ancestor')
+    
+    relations_to_create = []
+    
+    # Direct referral relationship (level 1)
+    relations_to_create.append(
+        ReferralRelation(
+            ancestor=referrer,
+            descendant=new_user,
+            level=1
+        )
+    )
+    
+    # Add relationships with all ancestors up to level 10
+    for relation in ancestor_relations:
+        new_level = relation.level + 1
+        if new_level <= MAX_REFERRAL_DEPTH:
+            # Check for circular reference
+            if relation.ancestor.id != new_user.id:
+                relations_to_create.append(
+                    ReferralRelation(
+                        ancestor=relation.ancestor,
+                        descendant=new_user,
+                        level=new_level
+                    )
+                )
+    
+    # Bulk create all relations
+    ReferralRelation.objects.bulk_create(relations_to_create, ignore_conflicts=True)
+
+
+def check_rank_upgrade(user):
+    """
+    Check and update user rank based on active referrals count
+    """
+    active_count = user.active_referrals_count
+    
+    new_rank = 'standard'
+    if active_count >= RANK_THRESHOLDS['platinum']:
+        new_rank = 'platinum'
+    elif active_count >= RANK_THRESHOLDS['gold']:
+        new_rank = 'gold'
+    elif active_count >= RANK_THRESHOLDS['silver']:
+        new_rank = 'silver'
+    
+    if new_rank != user.rank:
+        old_rank = user.rank
+        user.rank = new_rank
+        user.save(update_fields=['rank'])
+        
+        # Create notification about rank upgrade
+        Notification.objects.create(
+            user=user,
+            title='Rank Upgrade',
+            message=f'Congratulations! Your rank has been upgraded from {old_rank} to {new_rank}',
+            notification_type='rank_up'
+        )
+
+
+def get_depth_bonus_amount(user_type, rank, level):
+    """
+    Calculate depth bonus amount based on user type, rank and referral level
+    """
+    if level < 1 or level > MAX_REFERRAL_DEPTH:
+        return 0
+    
+    if user_type == 'influencer':
+        return DEPTH_BONUSES_INFLUENCER.get(rank, 0)
+    else:
+        return DEPTH_BONUSES_PLAYER.get(rank, 0)
 
 
 class TelegramAuthView(APIView):
@@ -322,10 +443,11 @@ class UserStatsView(APIView):
         referral_count = user.referrals.count()
         
         # Calculate total earnings
+        from django.db.models import Sum
         total_earnings = Transaction.objects.filter(
             user=user,
             transaction_type__in=['referral_bonus', 'depth_bonus', 'deposit_percent']
-        ).aggregate(total=models.Sum('amount'))['total'] or 0
+        ).aggregate(total=Sum('amount'))['total'] or 0
         
         stats = {
             'user_id': user.id,
@@ -337,6 +459,346 @@ class UserStatsView(APIView):
         
         serializer = MemberStatsSerializer(stats)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RegisterWithReferralView(APIView):
+    """
+    Register user with referral code
+    POST /api/user/register
+    """
+    authentication_classes = []
+    permission_classes = []
+    
+    @extend_schema(
+        request=UserRegisterSerializer,
+        responses={201: MemberSerializer}
+    )
+    def post(self, request):
+        serializer = UserRegisterSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {'detail': 'Invalid request data'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        data = serializer.validated_data
+        referrer_code = data.get('referrer_code')
+        
+        # Check if user already exists
+        if Member.objects.filter(telegram_id=data['telegram_id']).exists():
+            return Response(
+                {'detail': 'User already exists'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Find referrer if code provided
+        referrer = None
+        if referrer_code:
+            try:
+                referrer = Member.objects.get(referral_code=referrer_code)
+            except Member.DoesNotExist:
+                return Response(
+                    {'detail': 'Invalid referral code'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Create user with atomic transaction
+        with db_transaction.atomic():
+            # Create new user
+            new_user = Member.objects.create(
+                telegram_id=data['telegram_id'],
+                username=data.get('username'),
+                first_name=data.get('first_name', ''),
+                last_name=data.get('last_name', ''),
+                photo_url=data.get('photo_url'),
+                referrer=referrer
+            )
+            
+            # Build referral chain if referrer exists
+            if referrer:
+                # Check for circular reference
+                if new_user.id == referrer.id:
+                    db_transaction.set_rollback(True)
+                    return Response(
+                        {'detail': 'Circular referral detected'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Build referral chain
+                build_referral_chain(new_user, referrer)
+                
+                # Give direct bonus to referrer
+                if referrer.user_type == 'influencer':
+                    referrer.cash_balance += INFLUENCER_DIRECT_BONUS
+                    bonus_amount = INFLUENCER_DIRECT_BONUS
+                    currency_type = 'cash'
+                else:
+                    referrer.v_coins_balance += PLAYER_DIRECT_BONUS
+                    bonus_amount = PLAYER_DIRECT_BONUS
+                    currency_type = 'v_coins'
+                
+                # Update active referrals count
+                referrer.active_referrals_count += 1
+                referrer.save(update_fields=['cash_balance', 'v_coins_balance', 'active_referrals_count'])
+                
+                # Create transaction record for direct bonus
+                Transaction.objects.create(
+                    user=referrer,
+                    amount=bonus_amount,
+                    currency_type=currency_type,
+                    transaction_type='referral_bonus',
+                    related_user=new_user,
+                    description=f'Direct referral bonus from {new_user.first_name} (level 1)'
+                )
+                
+                # Create notification for referrer
+                Notification.objects.create(
+                    user=referrer,
+                    title='New Referral',
+                    message=f'{new_user.first_name} joined using your referral link! You received {bonus_amount} {"₽" if currency_type == "cash" else "V-Coins"}',
+                    notification_type='bonus'
+                )
+                
+                # Check rank upgrade for referrer
+                check_rank_upgrade(referrer)
+        
+        response_serializer = MemberSerializer(new_user)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class UserReferralsView(APIView):
+    """
+    Get user referrals with depth filter
+    GET /api/user/{user_id}/referrals
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        responses={200: {'type': 'object'}}
+    )
+    def get(self, request, user_id):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        try:
+            user = Member.objects.get(id=user_id)
+        except Member.DoesNotExist:
+            return Response(
+                {'detail': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check access permission
+        if request.user.id != user.id and not request.user.is_admin:
+            return Response(
+                {'detail': 'Access denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get depth parameter (1-10)
+        depth = int(request.query_params.get('depth', 1))
+        if depth < 1:
+            depth = 1
+        elif depth > MAX_REFERRAL_DEPTH:
+            depth = MAX_REFERRAL_DEPTH
+        
+        # Get all referrals up to specified depth
+        referral_relations = ReferralRelation.objects.filter(
+            ancestor=user,
+            level__lte=depth
+        ).select_related('descendant').order_by('level', 'created_at')
+        
+        # Build nested structure
+        referrals_by_level = {}
+        for relation in referral_relations:
+            level = relation.level
+            if level not in referrals_by_level:
+                referrals_by_level[level] = []
+            
+            descendant = relation.descendant
+            referral_data = {
+                'id': descendant.id,
+                'telegram_id': descendant.telegram_id,
+                'username': descendant.username,
+                'first_name': descendant.first_name,
+                'last_name': descendant.last_name,
+                'photo_url': descendant.photo_url,
+                'user_type': descendant.user_type,
+                'level': level,
+                'registered_at': descendant.created_at,
+                'referrals': []
+            }
+            referrals_by_level[level].append(referral_data)
+        
+        # Build hierarchical structure
+        def build_tree(parent_id, current_level):
+            if current_level > depth:
+                return []
+            
+            children = []
+            for ref in referrals_by_level.get(current_level, []):
+                # Check if this referral belongs to this parent
+                if current_level == 1:
+                    # Direct referrals
+                    if Member.objects.filter(id=ref['id'], referrer_id=user.id).exists():
+                        ref['referrals'] = build_tree(ref['id'], current_level + 1)
+                        children.append(ref)
+                else:
+                    # Indirect referrals
+                    if Member.objects.filter(id=ref['id'], referrer_id=parent_id).exists():
+                        ref['referrals'] = build_tree(ref['id'], current_level + 1)
+                        children.append(ref)
+            return children
+        
+        referrals = build_tree(user.id, 1)
+        total_referrals = sum(len(refs) for refs in referrals_by_level.values())
+        
+        return Response({
+            'user_id': user.id,
+            'total_referrals': total_referrals,
+            'depth': depth,
+            'referrals': referrals
+        }, status=status.HTTP_200_OK)
+
+
+class ReferralTreeView(APIView):
+    """
+    Get full referral tree for visualization
+    GET /api/user/{user_id}/referral-tree
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        responses={200: {'type': 'object'}}
+    )
+    def get(self, request, user_id):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        try:
+            user = Member.objects.get(id=user_id)
+        except Member.DoesNotExist:
+            return Response(
+                {'detail': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check access permission
+        if request.user.id != user.id and not request.user.is_admin:
+            return Response(
+                {'detail': 'Access denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get all descendant relations
+        all_relations = ReferralRelation.objects.filter(
+            ancestor=user
+        ).select_related('descendant').order_by('level', 'created_at')
+        
+        # Count referrals per level
+        levels = {}
+        for relation in all_relations:
+            level = str(relation.level)
+            levels[level] = levels.get(level, 0) + 1
+        
+        # Build tree structure recursively
+        def build_tree_node(node_user, current_level=1):
+            if current_level > MAX_REFERRAL_DEPTH:
+                return None
+            
+            # Get direct referrals
+            direct_referrals = Member.objects.filter(referrer=node_user).order_by('created_at')
+            
+            children = []
+            for child in direct_referrals:
+                # Count this child's total referrals
+                child_total = ReferralRelation.objects.filter(ancestor=child).count()
+                child_direct = Member.objects.filter(referrer=child).count()
+                
+                child_node = {
+                    'id': child.id,
+                    'telegram_id': child.telegram_id,
+                    'username': child.username,
+                    'first_name': child.first_name,
+                    'user_type': child.user_type,
+                    'level': current_level,
+                    'direct_referrals_count': child_direct,
+                    'total_referrals_count': child_total,
+                    'registered_at': child.created_at,
+                    'children': []
+                }
+                
+                # Recursively build children if not at max depth
+                if current_level < MAX_REFERRAL_DEPTH:
+                    child_tree = build_tree_node(child, current_level + 1)
+                    if child_tree:
+                        child_node['children'] = child_tree
+                
+                children.append(child_node)
+            
+            return children
+        
+        tree = build_tree_node(user, 1)
+        total_referrals = ReferralRelation.objects.filter(ancestor=user).count()
+        
+        return Response({
+            'user_id': user.id,
+            'referral_code': user.referral_code,
+            'total_referrals': total_referrals,
+            'levels': levels,
+            'tree': tree
+        }, status=status.HTTP_200_OK)
+
+
+class ReferralLinkView(APIView):
+    """
+    Get user referral link
+    GET /api/referral/link/{user_id}
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        responses={200: {'type': 'object'}}
+    )
+    def get(self, request, user_id):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        try:
+            user = Member.objects.get(id=user_id)
+        except Member.DoesNotExist:
+            return Response(
+                {'detail': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check access permission
+        if request.user.id != user.id and not request.user.is_admin:
+            return Response(
+                {'detail': 'Access denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Generate referral link
+        base_url = request.build_absolute_uri('/')[:-1]  # Remove trailing slash
+        referral_link = f"{base_url}/ref/{user.referral_code}"
+        qr_code_url = f"{base_url}/api/qr/{user.referral_code}"
+        
+        return Response({
+            'user_id': user.id,
+            'referral_code': user.referral_code,
+            'referral_link': referral_link,
+            'qr_code_url': qr_code_url
+        }, status=status.HTTP_200_OK)
 
 
 class HelloView(APIView):

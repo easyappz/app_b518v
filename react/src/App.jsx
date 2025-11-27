@@ -14,6 +14,7 @@ import InfluencerDashboard from './components/Dashboard/InfluencerDashboard';
 import ReferralTree from './components/ReferralTree';
 import Transactions from './components/Transactions';
 import Statistics from './components/Statistics';
+import Admin from './components/Admin';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,7 +43,13 @@ function App() {
         '/referral-tree',
         '/transactions',
         '/statistics',
-        '/withdrawals'
+        '/withdrawals',
+        '/admin',
+        '/admin/users',
+        '/admin/users/:userId',
+        '/admin/transactions',
+        '/admin/withdrawals',
+        '/admin/analytics'
       ]);
     }
   }, []);
@@ -62,6 +69,7 @@ function App() {
           <Route path="/referral-tree" element={<ReferralTree />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/statistics" element={<Statistics />} />
+          <Route path="/admin/*" element={<Admin />} />
         </Routes>
       </QueryClientProvider>
     </ErrorBoundary>

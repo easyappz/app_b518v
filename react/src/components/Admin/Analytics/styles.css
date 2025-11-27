@@ -1,0 +1,154 @@
+.admin-analytics {
+  max-width: 1400px;
+}
+
+.period-selector {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 32px;
+  background: white;
+  padding: 8px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.period-selector button {
+  flex: 1;
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #7f8c8d;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.period-selector button:hover {
+  background: #f8f9fa;
+  color: #2c3e50;
+}
+
+.period-selector button.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.charts-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 24px;
+}
+
+.chart-card.full-width {
+  grid-column: 1 / -1;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.activity-item {
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.activity-date {
+  font-size: 14px;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.activity-stats {
+  display: flex;
+  gap: 24px;
+}
+
+.activity-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
+.stat-value {
+  font-size: 16px;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.top-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.top-table th {
+  text-align: left;
+  padding: 12px;
+  background: #f8f9fa;
+  color: #7f8c8d;
+  font-size: 13px;
+  font-weight: 600;
+  border-bottom: 2px solid #ecf0f1;
+}
+
+.top-table td {
+  padding: 16px 12px;
+  border-bottom: 1px solid #ecf0f1;
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-name {
+  font-weight: 500;
+}
+
+.user-username {
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
+@media (max-width: 768px) {
+  .period-selector {
+    flex-wrap: wrap;
+  }
+  
+  .period-selector button {
+    flex: 1 1 calc(50% - 6px);
+  }
+  
+  .charts-section {
+    grid-template-columns: 1fr;
+  }
+  
+  .activity-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .activity-stats {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

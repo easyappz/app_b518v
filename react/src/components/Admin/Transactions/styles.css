@@ -1,0 +1,95 @@
+.admin-transactions {
+  max-width: 1600px;
+}
+
+.transactions-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.transactions-table th {
+  text-align: left;
+  padding: 16px;
+  background: #f8f9fa;
+  color: #7f8c8d;
+  font-size: 13px;
+  font-weight: 600;
+  border-bottom: 2px solid #ecf0f1;
+}
+
+.transactions-table td {
+  padding: 16px;
+  border-bottom: 1px solid #ecf0f1;
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+.user-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.username {
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
+.trans-type-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.trans-type-badge.referral_bonus {
+  background: rgba(155, 89, 182, 0.1);
+  color: #9b59b6;
+}
+
+.trans-type-badge.tournament_bonus {
+  background: rgba(52, 152, 219, 0.1);
+  color: #3498db;
+}
+
+.trans-type-badge.deposit_bonus {
+  background: rgba(46, 204, 113, 0.1);
+  color: #2ecc71;
+}
+
+.trans-type-badge.withdrawal {
+  background: rgba(231, 76, 60, 0.1);
+  color: #e74c3c;
+}
+
+.amount {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.amount.positive {
+  color: #27ae60;
+}
+
+.amount.negative {
+  color: #e74c3c;
+}
+
+.currency-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.currency-badge.v_coins {
+  background: rgba(52, 152, 219, 0.1);
+  color: #3498db;
+}
+
+.currency-badge.cash {
+  background: rgba(39, 174, 96, 0.1);
+  color: #27ae60;
+}

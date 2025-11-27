@@ -6,6 +6,9 @@ import './App.css';
 
 import { Home } from './components/Home';
 import Landing from './components/Landing';
+import Login from './components/Auth/Login';
+import Register from './components/Auth/Register';
+import ReferralRegister from './components/Auth/ReferralRegister';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,7 +25,7 @@ function App() {
   useEffect(() => {
     if (typeof window !== 'undefined' && typeof window.handleRoutes === 'function') {
       /** Нужно передавать список существующих роутов */
-      window.handleRoutes(['/', '/landing']);
+      window.handleRoutes(['/', '/landing', '/login', '/register', '/r/:referralCode', '/home']);
     }
   }, []);
 
@@ -32,6 +35,9 @@ function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/landing" element={<Landing />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/r/:referralCode" element={<ReferralRegister />} />
           <Route path="/home" element={<Home />} />
         </Routes>
       </QueryClientProvider>

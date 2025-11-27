@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ToastProvider } from './components/common/Toast';
 import ErrorBoundary from './ErrorBoundary';
 import './App.css';
 
@@ -58,19 +59,21 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/r/:code" element={<ReferralRegister />} />
-          <Route path="/dashboard" element={<PlayerDashboard />} />
-          <Route path="/referrals" element={<ReferralTree />} />
-          <Route path="/transactions" element={<Transactions />} />
-          <Route path="/statistics" element={<Statistics />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/admin/*" element={<Admin />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <ToastProvider>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/r/:code" element={<ReferralRegister />} />
+            <Route path="/dashboard" element={<PlayerDashboard />} />
+            <Route path="/referrals" element={<ReferralTree />} />
+            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/statistics" element={<Statistics />} />
+            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/admin/*" element={<Admin />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </ToastProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

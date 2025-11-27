@@ -108,12 +108,23 @@ a:hover {
   color: var(--accent-green);
 }
 
+a:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
 /* Button reset */
 button {
   font-family: inherit;
   border: none;
   background: none;
   cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
 }
 
 /* Input reset */
@@ -123,6 +134,13 @@ select {
   font-family: inherit;
   font-size: inherit;
   color: inherit;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
 }
 
 /* Card styles */
@@ -158,6 +176,10 @@ select {
   transform: translateY(-2px);
 }
 
+.btn-glow:focus-visible {
+  box-shadow: var(--glow-green), 0 0 0 2px var(--accent-green);
+}
+
 .btn-glow.primary {
   background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
   border: none;
@@ -166,4 +188,58 @@ select {
 
 .btn-glow.primary:hover {
   box-shadow: var(--glow-green), var(--glow-blue);
+}
+
+.btn-glow.primary:focus-visible {
+  box-shadow: var(--glow-green), var(--glow-blue), 0 0 0 2px var(--accent-blue);
+}
+
+/* Page transitions */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Accessibility improvements */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --text-primary: #ffffff;
+    --text-secondary: #d1d1d6;
+    --border-primary: #4a4a5a;
+    --border-secondary: #6a6a7a;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

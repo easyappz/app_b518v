@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Users, Wallet, Bell, LogOut, Menu, X } from 'lucide-react';
+import { Home, Users, DollarSign, Bell, LogOut, Menu, X, User } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import useNotificationStore from '../../store/notificationStore';
 import { logout } from '../../api/auth';
@@ -30,9 +30,9 @@ const Layout = ({ children }) => {
   };
 
   const navigationItems = [
-    { path: '/', icon: Home, label: 'Главная' },
+    { path: '/dashboard', icon: Home, label: 'Главная' },
     { path: '/referrals', icon: Users, label: 'Рефералы' },
-    { path: '/wallet', icon: Wallet, label: 'Кошелек' },
+    { path: '/transactions', icon: DollarSign, label: 'Транзакции' },
     { path: '/notifications', icon: Bell, label: 'Уведомления', badge: unreadCount },
   ];
 
@@ -55,17 +55,19 @@ const Layout = ({ children }) => {
               key={item.path}
               to={item.path}
               className={`nav-item ${isActivePath(item.path) ? 'active' : ''}`}
+              aria-label={item.label}
+              aria-current={isActivePath(item.path) ? 'page' : undefined}
             >
-              <item.icon size={20} />
+              <item.icon size={20} aria-hidden="true" />
               <span>{item.label}</span>
-              {item.badge > 0 && <span className="badge">{item.badge}</span>}
+              {item.badge > 0 && <span className="badge" aria-label={`${item.badge} непрочитанных`}>{item.badge}</span>}
             </Link>
           ))}
         </nav>
 
         {isAuthenticated && (
-          <button className="logout-btn" onClick={handleLogout}>
-            <LogOut size={20} />
+          <button className="logout-btn" onClick={handleLogout} aria-label="Выйти из системы">
+            <LogOut size={20} aria-hidden="true" />
             <span>Выйти</span>
           </button>
         )}
@@ -76,6 +78,8 @@ const Layout = ({ children }) => {
         <button 
           className="menu-toggle"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          aria-label={isMobileMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
+          aria-expanded={isMobileMenuOpen}
         >
           {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
@@ -86,7 +90,7 @@ const Layout = ({ children }) => {
 
         {isAuthenticated && user && (
           <div className="balance-mobile">
-            <span className="balance-amount">
+            <span className="balance-amount" aria-label="Баланс">
               {user.user_type === 'influencer' ? '₽' : 'V'}
             </span>
           </div>
@@ -95,26 +99,34 @@ const Layout = ({ children }) => {
 
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
-        <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)}>
+        <div 
+          className="mobile-menu-overlay" 
+          onClick={() => setIsMobileMenuOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Навигационное меню"
+        >
           <div className="mobile-menu" onClick={(e) => e.stopPropagation()}>
-            <nav className="mobile-nav">
+            <nav className="mobile-nav" aria-label="Основная навигация">
               {navigationItems.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
                   className={`nav-item ${isActivePath(item.path) ? 'active' : ''}`}
                   onClick={() => setIsMobileMenuOpen(false)}
+                  aria-label={item.label}
+                  aria-current={isActivePath(item.path) ? 'page' : undefined}
                 >
-                  <item.icon size={20} />
+                  <item.icon size={20} aria-hidden="true" />
                   <span>{item.label}</span>
-                  {item.badge > 0 && <span className="badge">{item.badge}</span>}
+                  {item.badge > 0 && <span className="badge" aria-label={`${item.badge} непрочитанных`}>{item.badge}</span>}
                 </Link>
               ))}
             </nav>
 
             {isAuthenticated && (
-              <button className="logout-btn" onClick={handleLogout}>
-                <LogOut size={20} />
+              <button className="logout-btn" onClick={handleLogout} aria-label="Выйти из системы">
+                <LogOut size={20} aria-hidden="true" />
                 <span>Выйти</span>
               </button>
             )}
@@ -148,16 +160,18 @@ const Layout = ({ children }) => {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="bottom-nav mobile-only">
+      <nav className="bottom-nav mobile-only" aria-label="Основная навигация">
         {navigationItems.map((item) => (
           <Link
             key={item.path}
             to={item.path}
             className={`nav-item ${isActivePath(item.path) ? 'active' : ''}`}
+            aria-label={item.label}
+            aria-current={isActivePath(item.path) ? 'page' : undefined}
           >
             <div className="nav-item-icon">
-              <item.icon size={22} />
-              {item.badge > 0 && <span className="badge">{item.badge}</span>}
+              <item.icon size={22} aria-hidden="true" />
+              {item.badge > 0 && <span className="badge" aria-label={`${item.badge} непрочитанных`}>{item.badge}</span>}
             </div>
             <span className="nav-item-label">{item.label}</span>
           </Link>

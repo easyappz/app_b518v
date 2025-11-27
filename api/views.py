@@ -6,11 +6,14 @@ from rest_framework.exceptions import AuthenticationFailed
 from django.utils import timezone
 from django.contrib.sessions.models import Session
 from django.db import transaction as db_transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
+from rest_framework.pagination import PageNumberPagination
 from drf_spectacular.utils import extend_schema
 import hashlib
 import hmac
 import secrets
+from datetime import datetime, timedelta
+from decimal import Decimal
 
 from .serializers import (
     MessageSerializer,
@@ -21,7 +24,8 @@ from .serializers import (
     UserRegisterSerializer,
     ReferralSerializer,
     ReferralTreeSerializer,
-    TransactionSerializer
+    TransactionSerializer,
+    TransactionFilterSerializer
 )
 from .models import Member, Transaction, ReferralRelation, Notification
 
@@ -51,6 +55,7 @@ DEPTH_BONUSES_INFLUENCER = {
 }
 
 MAX_REFERRAL_DEPTH = 10
+DEPOSIT_PERCENT = Decimal('0.10')  # 10% from deposit for influencer
 
 
 class CookieAuthentication(BaseAuthentication):
@@ -160,7 +165,7 @@ def check_rank_upgrade(user):
         user.save(update_fields=['rank'])
         
         # Create notification about rank upgrade
-        Notification.objects.create(
+        create_notification(
             user=user,
             title='Rank Upgrade',
             message=f'Congratulations! Your rank has been upgraded from {old_rank} to {new_rank}',
@@ -179,6 +184,33 @@ def get_depth_bonus_amount(user_type, rank, level):
         return DEPTH_BONUSES_INFLUENCER.get(rank, 0)
     else:
         return DEPTH_BONUSES_PLAYER.get(rank, 0)
+
+
+def create_notification(user, title, message, notification_type):
+    """
+    Create notification for user
+    
+    Args:
+        user: Member instance
+        title: Notification title
+        message: Notification message
+        notification_type: Type of notification (bonus, rank_up, withdrawal, system)
+    
+    Returns:
+        Notification instance
+    """
+    return Notification.objects.create(
+        user=user,
+        title=title,
+        message=message,
+        notification_type=notification_type
+    )
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 
 class TelegramAuthView(APIView):
@@ -443,7 +475,6 @@ class UserStatsView(APIView):
         referral_count = user.referrals.count()
         
         # Calculate total earnings
-        from django.db.models import Sum
         total_earnings = Transaction.objects.filter(
             user=user,
             transaction_type__in=['referral_bonus', 'depth_bonus', 'deposit_percent']
@@ -552,7 +583,7 @@ class RegisterWithReferralView(APIView):
                 )
                 
                 # Create notification for referrer
-                Notification.objects.create(
+                create_notification(
                     user=referrer,
                     title='New Referral',
                     message=f'{new_user.first_name} joined using your referral link! You received {bonus_amount} {"₽" if currency_type == "cash" else "V-Coins"}',
@@ -798,6 +829,392 @@ class ReferralLinkView(APIView):
             'referral_code': user.referral_code,
             'referral_link': referral_link,
             'qr_code_url': qr_code_url
+        }, status=status.HTTP_200_OK)
+
+
+class TransactionListView(APIView):
+    """
+    Get list of transactions for current user
+    GET /api/transactions
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        parameters=[
+            {'name': 'page', 'in': 'query', 'schema': {'type': 'integer'}},
+            {'name': 'page_size', 'in': 'query', 'schema': {'type': 'integer'}},
+            {'name': 'currency_type', 'in': 'query', 'schema': {'type': 'string'}},
+            {'name': 'transaction_type', 'in': 'query', 'schema': {'type': 'string'}},
+            {'name': 'date_from', 'in': 'query', 'schema': {'type': 'string', 'format': 'date'}},
+            {'name': 'date_to', 'in': 'query', 'schema': {'type': 'string', 'format': 'date'}},
+        ],
+        responses={200: TransactionSerializer(many=True)}
+    )
+    def get(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Get query parameters
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        currency_type = request.query_params.get('currency_type')
+        transaction_type = request.query_params.get('transaction_type')
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        
+        # Validate page_size
+        if page_size < 1:
+            page_size = 20
+        if page_size > 100:
+            page_size = 100
+        
+        # Build query
+        queryset = Transaction.objects.filter(user=request.user).select_related('related_user')
+        
+        # Apply filters
+        if currency_type:
+            # Map currency_type from API spec to model
+            currency_map = {
+                'vcoins': 'v_coins',
+                'rubles': 'cash'
+            }
+            model_currency = currency_map.get(currency_type)
+            if model_currency:
+                queryset = queryset.filter(currency_type=model_currency)
+        
+        if transaction_type:
+            # Map transaction types from API spec to model
+            type_map = {
+                'referral_bonus': 'referral_bonus',
+                'tournament_bonus': 'depth_bonus',
+                'deposit_bonus': 'deposit_percent',
+                'withdrawal': 'withdrawal',
+                'tournament_reward': 'referral_bonus'
+            }
+            model_type = type_map.get(transaction_type)
+            if model_type:
+                queryset = queryset.filter(transaction_type=model_type)
+        
+        if date_from:
+            try:
+                date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+                queryset = queryset.filter(created_at__gte=date_from_obj)
+            except ValueError:
+                pass
+        
+        if date_to:
+            try:
+                date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+                # Add one day to include the entire end date
+                date_to_obj = date_to_obj + timedelta(days=1)
+                queryset = queryset.filter(created_at__lt=date_to_obj)
+            except ValueError:
+                pass
+        
+        # Order by date (newest first)
+        queryset = queryset.order_by('-created_at')
+        
+        # Get total count
+        total_count = queryset.count()
+        
+        # Calculate pagination
+        start_index = (page - 1) * page_size
+        end_index = start_index + page_size
+        
+        # Get paginated results
+        transactions = queryset[start_index:end_index]
+        
+        # Serialize data
+        serializer = TransactionSerializer(transactions, many=True)
+        
+        # Build pagination URLs
+        base_url = request.build_absolute_uri(request.path)
+        next_url = None
+        previous_url = None
+        
+        if end_index < total_count:
+            next_url = f"{base_url}?page={page + 1}&page_size={page_size}"
+        
+        if page > 1:
+            previous_url = f"{base_url}?page={page - 1}&page_size={page_size}"
+        
+        return Response({
+            'count': total_count,
+            'next': next_url,
+            'previous': previous_url,
+            'results': serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+class FirstTournamentCompletedView(APIView):
+    """
+    Process first tournament completion for user
+    POST /api/tournament/first-completed
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        request={'type': 'object'},
+        responses={200: {'type': 'object'}}
+    )
+    def post(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Get request data
+        user_id = request.data.get('user_id')
+        tournament_id = request.data.get('tournament_id')
+        
+        if not user_id or not tournament_id:
+            return Response(
+                {'detail': 'user_id and tournament_id are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get user
+        try:
+            user = Member.objects.get(id=user_id)
+        except Member.DoesNotExist:
+            return Response(
+                {'detail': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        bonuses_distributed = []
+        
+        with db_transaction.atomic():
+            # Get all ancestor relations
+            ancestor_relations = ReferralRelation.objects.filter(
+                descendant=user
+            ).select_related('ancestor').order_by('level')
+            
+            for relation in ancestor_relations:
+                # Skip if already paid
+                if relation.has_paid_first_bonus:
+                    continue
+                
+                ancestor = relation.ancestor
+                level = relation.level
+                
+                # Level 1: Direct bonus
+                if level == 1:
+                    if ancestor.user_type == 'influencer':
+                        bonus_amount = Decimal(INFLUENCER_DIRECT_BONUS)
+                        currency_type = 'cash'
+                        ancestor.cash_balance += bonus_amount
+                    else:
+                        bonus_amount = Decimal(PLAYER_DIRECT_BONUS)
+                        currency_type = 'v_coins'
+                        ancestor.v_coins_balance += bonus_amount
+                    
+                    ancestor.save(update_fields=['cash_balance', 'v_coins_balance'])
+                    
+                    # Create transaction
+                    transaction = Transaction.objects.create(
+                        user=ancestor,
+                        amount=bonus_amount,
+                        currency_type=currency_type,
+                        transaction_type='referral_bonus',
+                        related_user=user,
+                        description=f'First tournament bonus from {user.first_name} (level {level})'
+                    )
+                    
+                    # Update active referrals count for direct referrer
+                    ancestor.active_referrals_count = Member.objects.filter(
+                        referrer=ancestor
+                    ).count()
+                    ancestor.save(update_fields=['active_referrals_count'])
+                    
+                    # Check rank upgrade
+                    check_rank_upgrade(ancestor)
+                    
+                    # Create notification
+                    create_notification(
+                        user=ancestor,
+                        title='Tournament Bonus',
+                        message=f'{user.first_name} completed their first tournament! You received {bonus_amount} {"₽" if currency_type == "cash" else "V-Coins"}',
+                        notification_type='bonus'
+                    )
+                    
+                    bonuses_distributed.append({
+                        'recipient_id': ancestor.id,
+                        'level': level,
+                        'amount': str(bonus_amount),
+                        'currency_type': 'rubles' if currency_type == 'cash' else 'vcoins',
+                        'transaction_id': transaction.id
+                    })
+                
+                # Levels 2-10: Depth cashback based on rank
+                elif 2 <= level <= MAX_REFERRAL_DEPTH:
+                    bonus_amount = Decimal(get_depth_bonus_amount(
+                        ancestor.user_type,
+                        ancestor.rank,
+                        level
+                    ))
+                    
+                    if bonus_amount > 0:
+                        if ancestor.user_type == 'influencer':
+                            currency_type = 'cash'
+                            ancestor.cash_balance += bonus_amount
+                        else:
+                            currency_type = 'v_coins'
+                            ancestor.v_coins_balance += bonus_amount
+                        
+                        ancestor.save(update_fields=['cash_balance', 'v_coins_balance'])
+                        
+                        # Create transaction
+                        transaction = Transaction.objects.create(
+                            user=ancestor,
+                            amount=bonus_amount,
+                            currency_type=currency_type,
+                            transaction_type='depth_bonus',
+                            related_user=user,
+                            description=f'Depth bonus from {user.first_name} (level {level})'
+                        )
+                        
+                        # Create notification
+                        create_notification(
+                            user=ancestor,
+                            title='Depth Bonus',
+                            message=f'Level {level} referral {user.first_name} completed first tournament! You received {bonus_amount} {"₽" if currency_type == "cash" else "V-Coins"}',
+                            notification_type='bonus'
+                        )
+                        
+                        bonuses_distributed.append({
+                            'recipient_id': ancestor.id,
+                            'level': level,
+                            'amount': str(bonus_amount),
+                            'currency_type': 'rubles' if currency_type == 'cash' else 'vcoins',
+                            'transaction_id': transaction.id
+                        })
+                
+                # Mark as paid
+                relation.has_paid_first_bonus = True
+                relation.save(update_fields=['has_paid_first_bonus'])
+        
+        return Response({
+            'success': True,
+            'user_id': user.id,
+            'tournament_id': tournament_id,
+            'bonuses_distributed': bonuses_distributed
+        }, status=status.HTTP_200_OK)
+
+
+class DepositProcessedView(APIView):
+    """
+    Process user deposit and distribute bonuses
+    POST /api/deposit/processed
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        request={'type': 'object'},
+        responses={200: {'type': 'object'}}
+    )
+    def post(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Get request data
+        user_id = request.data.get('user_id')
+        amount = request.data.get('amount')
+        deposit_id = request.data.get('deposit_id')
+        
+        if not user_id or not amount or not deposit_id:
+            return Response(
+                {'detail': 'user_id, amount and deposit_id are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate amount
+        try:
+            amount = Decimal(str(amount))
+            if amount <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            return Response(
+                {'detail': 'Invalid amount'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get user
+        try:
+            user = Member.objects.get(id=user_id)
+        except Member.DoesNotExist:
+            return Response(
+                {'detail': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        bonuses_distributed = []
+        
+        with db_transaction.atomic():
+            # Update user's total deposits
+            user.total_deposits += amount
+            user.save(update_fields=['total_deposits'])
+            
+            # Find direct referrer (level 1)
+            try:
+                direct_relation = ReferralRelation.objects.get(
+                    descendant=user,
+                    level=1
+                )
+                referrer = direct_relation.ancestor
+                
+                # Check if referrer is influencer
+                if referrer.user_type == 'influencer':
+                    # Calculate 10% bonus
+                    bonus_amount = amount * DEPOSIT_PERCENT
+                    
+                    # Add to referrer's cash balance
+                    referrer.cash_balance += bonus_amount
+                    referrer.save(update_fields=['cash_balance'])
+                    
+                    # Create transaction
+                    transaction = Transaction.objects.create(
+                        user=referrer,
+                        amount=bonus_amount,
+                        currency_type='cash',
+                        transaction_type='deposit_percent',
+                        related_user=user,
+                        description=f'10% from {user.first_name} deposit of {amount}₽ (level 1)'
+                    )
+                    
+                    # Create notification
+                    create_notification(
+                        user=referrer,
+                        title='Deposit Bonus',
+                        message=f'{user.first_name} made a deposit of {amount}₽! You received {bonus_amount}₽ (10%)',
+                        notification_type='bonus'
+                    )
+                    
+                    bonuses_distributed.append({
+                        'recipient_id': referrer.id,
+                        'level': 1,
+                        'amount': str(bonus_amount),
+                        'currency_type': 'rubles',
+                        'transaction_id': transaction.id
+                    })
+            
+            except ReferralRelation.DoesNotExist:
+                # User has no referrer
+                pass
+        
+        return Response({
+            'success': True,
+            'user_id': user.id,
+            'deposit_id': deposit_id,
+            'amount': str(amount),
+            'bonuses_distributed': bonuses_distributed
         }, status=status.HTTP_200_OK)
 
 

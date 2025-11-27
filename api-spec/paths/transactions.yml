@@ -1,0 +1,300 @@
+paths:
+  /api/transactions:
+    get:
+      summary: Get user transactions
+      description: Get list of transactions for current user with pagination and filters
+      tags:
+        - Transactions
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number
+        - name: page_size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of items per page
+        - name: currency_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [vcoins, rubles]
+          description: Filter by currency type
+        - name: transaction_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [referral_bonus, tournament_bonus, deposit_bonus, withdrawal, tournament_reward]
+          description: Filter by transaction type
+        - name: date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Filter transactions from date (YYYY-MM-DD)
+        - name: date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Filter transactions to date (YYYY-MM-DD)
+      responses:
+        '200':
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    example: 156
+                  next:
+                    type: string
+                    nullable: true
+                    example: "http://localhost:8000/api/transactions?page=2"
+                  previous:
+                    type: string
+                    nullable: true
+                    example: null
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 1
+                        transaction_type:
+                          type: string
+                          enum: [referral_bonus, tournament_bonus, deposit_bonus, withdrawal, tournament_reward]
+                          example: "referral_bonus"
+                        currency_type:
+                          type: string
+                          enum: [vcoins, rubles]
+                          example: "vcoins"
+                        amount:
+                          type: string
+                          example: "100.00"
+                        description:
+                          type: string
+                          example: "Referral bonus for level 1"
+                        referral_level:
+                          type: integer
+                          nullable: true
+                          example: 1
+                        related_user_id:
+                          type: integer
+                          nullable: true
+                          example: 15
+                        related_user_name:
+                          type: string
+                          nullable: true
+                          example: "Jane Doe"
+                        status:
+                          type: string
+                          enum: [pending, completed, failed, cancelled]
+                          example: "completed"
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/tournament/first-completed:
+    post:
+      summary: Process first tournament completion
+      description: Handle first tournament completion for user (integration endpoint)
+      tags:
+        - Transactions
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: integer
+                  description: User ID who completed tournament
+                  example: 5
+                tournament_id:
+                  type: string
+                  description: Tournament identifier
+                  example: "TOURN-2024-001"
+              required:
+                - user_id
+                - tournament_id
+      responses:
+        '200':
+          description: Tournament completion processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user_id:
+                    type: integer
+                    example: 5
+                  tournament_id:
+                    type: string
+                    example: "TOURN-2024-001"
+                  bonuses_distributed:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        recipient_id:
+                          type: integer
+                          example: 2
+                        level:
+                          type: integer
+                          example: 1
+                        amount:
+                          type: string
+                          example: "50.00"
+                        currency_type:
+                          type: string
+                          enum: [vcoins, rubles]
+                          example: "vcoins"
+                        transaction_id:
+                          type: integer
+                          example: 123
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/deposit/processed:
+    post:
+      summary: Process user deposit
+      description: Handle deposit processing and distribute referral bonuses (integration endpoint)
+      tags:
+        - Transactions
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: integer
+                  description: User ID who made deposit
+                  example: 5
+                amount:
+                  type: number
+                  format: float
+                  description: Deposit amount in rubles
+                  example: 1000.00
+                deposit_id:
+                  type: string
+                  description: Deposit transaction identifier
+                  example: "DEP-2024-12345"
+              required:
+                - user_id
+                - amount
+                - deposit_id
+      responses:
+        '200':
+          description: Deposit processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user_id:
+                    type: integer
+                    example: 5
+                  deposit_id:
+                    type: string
+                    example: "DEP-2024-12345"
+                  amount:
+                    type: string
+                    example: "1000.00"
+                  bonuses_distributed:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        recipient_id:
+                          type: integer
+                          example: 2
+                        level:
+                          type: integer
+                          example: 1
+                        amount:
+                          type: string
+                          example: "50.00"
+                        currency_type:
+                          type: string
+                          enum: [vcoins, rubles]
+                          example: "rubles"
+                        transaction_id:
+                          type: integer
+                          example: 124
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'

@@ -1,0 +1,350 @@
+paths:
+  /api/user/register:
+    post:
+      summary: Register user with referral code
+      description: Register new user with optional referral code and Telegram data
+      tags:
+        - Referrals
+      x-isSecure: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                telegram_id:
+                  type: integer
+                  description: Telegram user ID
+                  example: 123456789
+                username:
+                  type: string
+                  description: Telegram username
+                  example: "john_doe"
+                  nullable: true
+                first_name:
+                  type: string
+                  description: User's first name
+                  example: "John"
+                last_name:
+                  type: string
+                  description: User's last name
+                  example: "Doe"
+                  nullable: true
+                photo_url:
+                  type: string
+                  description: URL to user's photo
+                  example: "https://example.com/photo.jpg"
+                  nullable: true
+                referrer_code:
+                  type: string
+                  description: Referral code of the inviter
+                  example: "ABC123XYZ"
+                  nullable: true
+              required:
+                - telegram_id
+                - first_name
+      responses:
+        '201':
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  telegram_id:
+                    type: integer
+                    example: 123456789
+                  username:
+                    type: string
+                    nullable: true
+                    example: "john_doe"
+                  first_name:
+                    type: string
+                    example: "John"
+                  last_name:
+                    type: string
+                    nullable: true
+                    example: "Doe"
+                  photo_url:
+                    type: string
+                    nullable: true
+                    example: "https://example.com/photo.jpg"
+                  user_type:
+                    type: string
+                    enum: [player, influencer]
+                    example: "player"
+                  referral_code:
+                    type: string
+                    example: "XYZ789ABC"
+                  created_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+        '400':
+          description: Invalid request data or referral code
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/user/{user_id}/referrals:
+    get:
+      summary: Get user referrals
+      description: Get referrals tree for specific user with configurable depth
+      tags:
+        - Referrals
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: User ID
+        - name: depth
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+            default: 1
+          description: Depth of referral tree (1-10 levels)
+      responses:
+        '200':
+          description: Referrals tree
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: integer
+                    example: 1
+                  total_referrals:
+                    type: integer
+                    example: 15
+                  depth:
+                    type: integer
+                    example: 3
+                  referrals:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 2
+                        telegram_id:
+                          type: integer
+                          example: 987654321
+                        username:
+                          type: string
+                          nullable: true
+                          example: "jane_doe"
+                        first_name:
+                          type: string
+                          example: "Jane"
+                        last_name:
+                          type: string
+                          nullable: true
+                          example: "Doe"
+                        photo_url:
+                          type: string
+                          nullable: true
+                          example: "https://example.com/photo2.jpg"
+                        user_type:
+                          type: string
+                          enum: [player, influencer]
+                          example: "player"
+                        level:
+                          type: integer
+                          example: 1
+                        registered_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-16T14:20:00Z"
+                        referrals:
+                          type: array
+                          items:
+                            type: object
+                          description: Nested referrals (recursive structure)
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/user/{user_id}/referral-tree:
+    get:
+      summary: Get full referral tree visualization
+      description: Get complete referral tree structure up to 10 levels for visualization
+      tags:
+        - Referrals
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: User ID
+      responses:
+        '200':
+          description: Full referral tree
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: integer
+                    example: 1
+                  referral_code:
+                    type: string
+                    example: "ABC123XYZ"
+                  total_referrals:
+                    type: integer
+                    example: 127
+                  levels:
+                    type: object
+                    description: Count of referrals per level
+                    example:
+                      "1": 10
+                      "2": 45
+                      "3": 72
+                  tree:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 2
+                        telegram_id:
+                          type: integer
+                          example: 987654321
+                        username:
+                          type: string
+                          nullable: true
+                          example: "jane_doe"
+                        first_name:
+                          type: string
+                          example: "Jane"
+                        user_type:
+                          type: string
+                          enum: [player, influencer]
+                          example: "player"
+                        level:
+                          type: integer
+                          example: 1
+                        direct_referrals_count:
+                          type: integer
+                          example: 5
+                        total_referrals_count:
+                          type: integer
+                          example: 15
+                        registered_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-16T14:20:00Z"
+                        children:
+                          type: array
+                          items:
+                            type: object
+                          description: Nested referrals (recursive up to 10 levels)
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/referral/link/{user_id}:
+    get:
+      summary: Get user referral link
+      description: Get referral link for specific user
+      tags:
+        - Referrals
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: User ID
+      responses:
+        '200':
+          description: Referral link
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: integer
+                    example: 1
+                  referral_code:
+                    type: string
+                    example: "ABC123XYZ"
+                  referral_link:
+                    type: string
+                    example: "https://pokerchain.app/ref/ABC123XYZ"
+                  qr_code_url:
+                    type: string
+                    nullable: true
+                    example: "https://pokerchain.app/api/qr/ABC123XYZ"
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'

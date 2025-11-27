@@ -19,6 +19,24 @@ paths:
     $ref: './paths/users.yml#/paths/~1api~1users~1{user_id}'
   /api/users/{user_id}/stats:
     $ref: './paths/users.yml#/paths/~1api~1users~1{user_id}~1stats'
+  /api/user/register:
+    $ref: './paths/referrals.yml#/paths/~1api~1user~1register'
+  /api/user/{user_id}/referrals:
+    $ref: './paths/referrals.yml#/paths/~1api~1user~1{user_id}~1referrals'
+  /api/user/{user_id}/referral-tree:
+    $ref: './paths/referrals.yml#/paths/~1api~1user~1{user_id}~1referral-tree'
+  /api/referral/link/{user_id}:
+    $ref: './paths/referrals.yml#/paths/~1api~1referral~1link~1{user_id}'
+  /api/transactions:
+    $ref: './paths/transactions.yml#/paths/~1api~1transactions'
+  /api/tournament/first-completed:
+    $ref: './paths/transactions.yml#/paths/~1api~1tournament~1first-completed'
+  /api/deposit/processed:
+    $ref: './paths/transactions.yml#/paths/~1api~1deposit~1processed'
+  /api/withdrawals:
+    $ref: './paths/withdrawals.yml#/paths/~1api~1withdrawals'
+  /api/withdrawals/{id}:
+    $ref: './paths/withdrawals.yml#/paths/~1api~1withdrawals~1{id}'
 
 components:
   securitySchemes:

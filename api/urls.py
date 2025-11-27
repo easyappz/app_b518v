@@ -20,6 +20,14 @@ from .views import (
     NotificationListView,
     NotificationReadView,
     PushSubscribeView,
+    AdminUserListView,
+    AdminUserDetailView,
+    AdminUserUpdateView,
+    AdminTransactionListView,
+    AdminWithdrawalListView,
+    AdminWithdrawalUpdateView,
+    AdminStatsView,
+    AdminAnalyticsView,
 )
 
 urlpatterns = [
@@ -55,4 +63,14 @@ urlpatterns = [
     path('notifications', NotificationListView.as_view(), name='notification-list'),
     path('notifications/<int:id>/read', NotificationReadView.as_view(), name='notification-read'),
     path('notifications/push-subscribe', PushSubscribeView.as_view(), name='push-subscribe'),
+    
+    # Admin
+    path('admin/users', AdminUserListView.as_view(), name='admin-user-list'),
+    path('admin/users/<int:user_id>', AdminUserDetailView.as_view(), name='admin-user-detail'),
+    path('admin/users/<int:user_id>', AdminUserUpdateView.as_view(), name='admin-user-update'),
+    path('admin/transactions', AdminTransactionListView.as_view(), name='admin-transaction-list'),
+    path('admin/withdrawals', AdminWithdrawalListView.as_view(), name='admin-withdrawal-list'),
+    path('admin/withdrawals/<int:id>', AdminWithdrawalUpdateView.as_view(), name='admin-withdrawal-update'),
+    path('admin/stats', AdminStatsView.as_view(), name='admin-stats'),
+    path('admin/analytics', AdminAnalyticsView.as_view(), name='admin-analytics'),
 ]

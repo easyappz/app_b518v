@@ -29,7 +29,11 @@ from .serializers import (
     WithdrawalSerializer,
     WithdrawalCreateSerializer,
     NotificationSerializer,
-    PushSubscriptionSerializer
+    PushSubscriptionSerializer,
+    AdminUserSerializer,
+    AdminUserUpdateSerializer,
+    AdminStatsSerializer,
+    AdminAnalyticsSerializer
 )
 from .models import Member, Transaction, ReferralRelation, Notification, Withdrawal, PushSubscription
 
@@ -1534,6 +1538,727 @@ class PushSubscribeView(APIView):
             'message': 'Subscribed to push notifications successfully',
             'subscription_id': subscription.id
         }, status=status.HTTP_200_OK)
+
+
+class AdminUserListView(APIView):
+    """
+    Get all users list (Admin only)
+    GET /api/admin/users
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        responses={200: {'type': 'object'}}
+    )
+    def get(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Check if user is admin
+        if not request.user.is_admin:
+            return Response(
+                {'detail': 'Admin access required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get query parameters
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        user_type = request.query_params.get('user_type')
+        rank = request.query_params.get('rank')
+        search = request.query_params.get('search')
+        
+        # Validate page_size
+        if page_size < 1:
+            page_size = 20
+        if page_size > 100:
+            page_size = 100
+        
+        # Build query
+        queryset = Member.objects.all()
+        
+        # Apply filters
+        if user_type:
+            queryset = queryset.filter(user_type=user_type)
+        
+        if rank:
+            queryset = queryset.filter(rank=rank)
+        
+        if search:
+            queryset = queryset.filter(
+                Q(username__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(telegram_id__icontains=search)
+            )
+        
+        # Order by created_at (newest first)
+        queryset = queryset.order_by('-created_at')
+        
+        # Get total count
+        total_count = queryset.count()
+        
+        # Calculate pagination
+        start_index = (page - 1) * page_size
+        end_index = start_index + page_size
+        
+        # Get paginated results
+        users = queryset[start_index:end_index]
+        
+        # Serialize data
+        results = []
+        for user in users:
+            results.append({
+                'id': user.id,
+                'telegram_id': user.telegram_id,
+                'username': user.username,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'photo_url': user.photo_url,
+                'user_type': user.user_type,
+                'rank': user.rank,
+                'v_coins_balance': float(user.v_coins_balance),
+                'cash_balance': float(user.cash_balance),
+                'is_blocked': user.is_blocked,
+                'referral_code': user.referral_code,
+                'created_at': user.created_at.isoformat()
+            })
+        
+        # Build pagination URLs
+        base_url = request.build_absolute_uri(request.path)
+        next_url = None
+        previous_url = None
+        
+        if end_index < total_count:
+            next_url = f"{base_url}?page={page + 1}&page_size={page_size}"
+        
+        if page > 1:
+            previous_url = f"{base_url}?page={page - 1}&page_size={page_size}"
+        
+        return Response({
+            'count': total_count,
+            'next': next_url,
+            'previous': previous_url,
+            'results': results
+        }, status=status.HTTP_200_OK)
+
+
+class AdminUserDetailView(APIView):
+    """
+    Get user details (Admin only)
+    GET /api/admin/users/{user_id}
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        responses={200: AdminUserSerializer}
+    )
+    def get(self, request, user_id):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Check if user is admin
+        if not request.user.is_admin:
+            return Response(
+                {'detail': 'Admin access required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        try:
+            user = Member.objects.get(id=user_id)
+        except Member.DoesNotExist:
+            return Response(
+                {'detail': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Calculate statistics
+        total_referrals = ReferralRelation.objects.filter(ancestor=user).count()
+        total_earnings = Transaction.objects.filter(
+            user=user,
+            transaction_type__in=['referral_bonus', 'depth_bonus', 'deposit_percent']
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        
+        # Build response
+        response_data = {
+            'id': user.id,
+            'telegram_id': user.telegram_id,
+            'username': user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'photo_url': user.photo_url,
+            'user_type': user.user_type,
+            'rank': user.rank,
+            'v_coins_balance': float(user.v_coins_balance),
+            'cash_balance': float(user.cash_balance),
+            'is_blocked': user.is_blocked,
+            'referral_code': user.referral_code,
+            'referred_by': None,
+            'total_referrals': total_referrals,
+            'total_earnings': float(total_earnings),
+            'created_at': user.created_at.isoformat(),
+            'updated_at': user.created_at.isoformat()
+        }
+        
+        if user.referrer:
+            response_data['referred_by'] = {
+                'id': user.referrer.id,
+                'username': user.referrer.username,
+                'first_name': user.referrer.first_name
+            }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class AdminUserUpdateView(APIView):
+    """
+    Update user (Admin only)
+    PATCH /api/admin/users/{user_id}
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        request=AdminUserUpdateSerializer,
+        responses={200: {'type': 'object'}}
+    )
+    def patch(self, request, user_id):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Check if user is admin
+        if not request.user.is_admin:
+            return Response(
+                {'detail': 'Admin access required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        try:
+            user = Member.objects.get(id=user_id)
+        except Member.DoesNotExist:
+            return Response(
+                {'detail': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = AdminUserUpdateSerializer(user, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(
+                {'detail': 'Invalid request data'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer.save()
+        user.refresh_from_db()
+        
+        # Build response
+        response_data = {
+            'id': user.id,
+            'telegram_id': user.telegram_id,
+            'username': user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'user_type': user.user_type,
+            'rank': user.rank,
+            'v_coins_balance': float(user.v_coins_balance),
+            'cash_balance': float(user.cash_balance),
+            'is_blocked': user.is_blocked,
+            'updated_at': timezone.now().isoformat()
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class AdminTransactionListView(APIView):
+    """
+    Get all transactions (Admin only)
+    GET /api/admin/transactions
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        responses={200: {'type': 'object'}}
+    )
+    def get(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Check if user is admin
+        if not request.user.is_admin:
+            return Response(
+                {'detail': 'Admin access required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get query parameters
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        user_id = request.query_params.get('user_id')
+        transaction_type = request.query_params.get('transaction_type')
+        currency = request.query_params.get('currency')
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        
+        # Validate page_size
+        if page_size < 1:
+            page_size = 20
+        if page_size > 100:
+            page_size = 100
+        
+        # Build query
+        queryset = Transaction.objects.all().select_related('user', 'related_user')
+        
+        # Apply filters
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        
+        if transaction_type:
+            queryset = queryset.filter(transaction_type=transaction_type)
+        
+        if currency:
+            # Map currency from API spec to model
+            currency_map = {
+                'v_coins': 'v_coins',
+                'cash': 'cash'
+            }
+            model_currency = currency_map.get(currency)
+            if model_currency:
+                queryset = queryset.filter(currency_type=model_currency)
+        
+        if date_from:
+            try:
+                date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+                queryset = queryset.filter(created_at__gte=date_from_obj)
+            except ValueError:
+                pass
+        
+        if date_to:
+            try:
+                date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+                date_to_obj = date_to_obj + timedelta(days=1)
+                queryset = queryset.filter(created_at__lt=date_to_obj)
+            except ValueError:
+                pass
+        
+        # Order by date (newest first)
+        queryset = queryset.order_by('-created_at')
+        
+        # Get total count
+        total_count = queryset.count()
+        
+        # Calculate pagination
+        start_index = (page - 1) * page_size
+        end_index = start_index + page_size
+        
+        # Get paginated results
+        transactions = queryset[start_index:end_index]
+        
+        # Serialize data
+        results = []
+        for trans in transactions:
+            results.append({
+                'id': trans.id,
+                'user': {
+                    'id': trans.user.id,
+                    'username': trans.user.username,
+                    'first_name': trans.user.first_name
+                },
+                'transaction_type': trans.transaction_type,
+                'amount': float(trans.amount),
+                'currency': trans.currency_type,
+                'description': trans.description,
+                'created_at': trans.created_at.isoformat()
+            })
+        
+        # Build pagination URLs
+        base_url = request.build_absolute_uri(request.path)
+        next_url = None
+        previous_url = None
+        
+        if end_index < total_count:
+            next_url = f"{base_url}?page={page + 1}&page_size={page_size}"
+        
+        if page > 1:
+            previous_url = f"{base_url}?page={page - 1}&page_size={page_size}"
+        
+        return Response({
+            'count': total_count,
+            'next': next_url,
+            'previous': previous_url,
+            'results': results
+        }, status=status.HTTP_200_OK)
+
+
+class AdminWithdrawalListView(APIView):
+    """
+    Get all withdrawal requests (Admin only)
+    GET /api/admin/withdrawals
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        responses={200: {'type': 'object'}}
+    )
+    def get(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Check if user is admin
+        if not request.user.is_admin:
+            return Response(
+                {'detail': 'Admin access required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get query parameters
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        status_filter = request.query_params.get('status')
+        user_id = request.query_params.get('user_id')
+        
+        # Validate page_size
+        if page_size < 1:
+            page_size = 20
+        if page_size > 100:
+            page_size = 100
+        
+        # Build query
+        queryset = Withdrawal.objects.all().select_related('user')
+        
+        # Apply filters
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        
+        # Order by date (newest first)
+        queryset = queryset.order_by('-created_at')
+        
+        # Get total count
+        total_count = queryset.count()
+        
+        # Calculate pagination
+        start_index = (page - 1) * page_size
+        end_index = start_index + page_size
+        
+        # Get paginated results
+        withdrawals = queryset[start_index:end_index]
+        
+        # Serialize data
+        results = []
+        for withdrawal in withdrawals:
+            results.append({
+                'id': withdrawal.id,
+                'user': {
+                    'id': withdrawal.user.id,
+                    'username': withdrawal.user.username,
+                    'first_name': withdrawal.user.first_name,
+                    'user_type': withdrawal.user.user_type
+                },
+                'amount': float(withdrawal.amount),
+                'payment_method': withdrawal.method,
+                'payment_details': withdrawal.wallet_address,
+                'status': withdrawal.status,
+                'rejection_reason': withdrawal.rejection_reason,
+                'created_at': withdrawal.created_at.isoformat(),
+                'updated_at': withdrawal.created_at.isoformat()
+            })
+        
+        # Build pagination URLs
+        base_url = request.build_absolute_uri(request.path)
+        next_url = None
+        previous_url = None
+        
+        if end_index < total_count:
+            next_url = f"{base_url}?page={page + 1}&page_size={page_size}"
+        
+        if page > 1:
+            previous_url = f"{base_url}?page={page - 1}&page_size={page_size}"
+        
+        return Response({
+            'count': total_count,
+            'next': next_url,
+            'previous': previous_url,
+            'results': results
+        }, status=status.HTTP_200_OK)
+
+
+class AdminWithdrawalUpdateView(APIView):
+    """
+    Update withdrawal request status (Admin only)
+    PATCH /api/admin/withdrawals/{id}
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        responses={200: {'type': 'object'}}
+    )
+    def patch(self, request, id):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Check if user is admin
+        if not request.user.is_admin:
+            return Response(
+                {'detail': 'Admin access required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        try:
+            withdrawal = Withdrawal.objects.get(id=id)
+        except Withdrawal.DoesNotExist:
+            return Response(
+                {'detail': 'Withdrawal not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get status from request
+        new_status = request.data.get('status')
+        rejection_reason = request.data.get('rejection_reason')
+        
+        if not new_status:
+            return Response(
+                {'detail': 'Status is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if new_status not in ['approved', 'rejected']:
+            return Response(
+                {'detail': 'Status must be approved or rejected'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        with db_transaction.atomic():
+            # Update withdrawal status
+            withdrawal.status = new_status
+            withdrawal.processed_at = timezone.now()
+            
+            if new_status == 'rejected' and rejection_reason:
+                withdrawal.rejection_reason = rejection_reason
+            
+            withdrawal.save()
+            
+            # If approved, deduct balance
+            if new_status == 'approved':
+                user = withdrawal.user
+                if user.cash_balance >= withdrawal.amount:
+                    user.cash_balance -= withdrawal.amount
+                    user.save(update_fields=['cash_balance'])
+                    
+                    # Create transaction record
+                    Transaction.objects.create(
+                        user=user,
+                        amount=withdrawal.amount,
+                        currency_type='cash',
+                        transaction_type='withdrawal',
+                        description=f'Withdrawal to {withdrawal.method}: {withdrawal.wallet_address}'
+                    )
+                    
+                    # Create notification
+                    create_notification(
+                        user=user,
+                        title='Withdrawal Approved',
+                        message=f'Your withdrawal request for {withdrawal.amount}₽ has been approved and processed.',
+                        notification_type='withdrawal_approved'
+                    )
+                else:
+                    # Insufficient balance, reject the withdrawal
+                    withdrawal.status = 'rejected'
+                    withdrawal.rejection_reason = 'Insufficient balance'
+                    withdrawal.save()
+            
+            # If rejected, create notification
+            if new_status == 'rejected':
+                create_notification(
+                    user=withdrawal.user,
+                    title='Withdrawal Rejected',
+                    message=f'Your withdrawal request for {withdrawal.amount}₽ has been rejected. Reason: {rejection_reason or "Not specified"}',
+                    notification_type='withdrawal_rejected'
+                )
+        
+        # Build response
+        response_data = {
+            'id': withdrawal.id,
+            'user_id': withdrawal.user.id,
+            'amount': float(withdrawal.amount),
+            'payment_method': withdrawal.method,
+            'payment_details': withdrawal.wallet_address,
+            'status': withdrawal.status,
+            'rejection_reason': withdrawal.rejection_reason,
+            'created_at': withdrawal.created_at.isoformat(),
+            'updated_at': withdrawal.processed_at.isoformat() if withdrawal.processed_at else withdrawal.created_at.isoformat()
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class AdminStatsView(APIView):
+    """
+    Get system statistics (Admin only)
+    GET /api/admin/stats
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        responses={200: AdminStatsSerializer}
+    )
+    def get(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Check if user is admin
+        if not request.user.is_admin:
+            return Response(
+                {'detail': 'Admin access required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Calculate statistics
+        total_users = Member.objects.count()
+        total_players = Member.objects.filter(user_type='player').count()
+        total_influencers = Member.objects.filter(user_type='influencer').count()
+        
+        total_v_coins = Member.objects.aggregate(
+            total=Sum('v_coins_balance')
+        )['total'] or 0
+        
+        total_cash_payouts = Transaction.objects.filter(
+            transaction_type='withdrawal'
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        
+        total_transactions = Transaction.objects.count()
+        
+        pending_withdrawals = Withdrawal.objects.filter(status='pending').count()
+        pending_withdrawals_amount = Withdrawal.objects.filter(
+            status='pending'
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        
+        stats = {
+            'total_users': total_users,
+            'total_players': total_players,
+            'total_influencers': total_influencers,
+            'total_v_coins': float(total_v_coins),
+            'total_cash_payouts': float(total_cash_payouts),
+            'total_transactions': total_transactions,
+            'pending_withdrawals': pending_withdrawals,
+            'pending_withdrawals_amount': float(pending_withdrawals_amount)
+        }
+        
+        return Response(stats, status=status.HTTP_200_OK)
+
+
+class AdminAnalyticsView(APIView):
+    """
+    Get system analytics (Admin only)
+    GET /api/admin/analytics
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        responses={200: AdminAnalyticsSerializer}
+    )
+    def get(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Check if user is admin
+        if not request.user.is_admin:
+            return Response(
+                {'detail': 'Admin access required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get period parameter
+        period = request.query_params.get('period', '30days')
+        
+        # Calculate date range
+        now = timezone.now()
+        if period == '7days':
+            start_date = now - timedelta(days=7)
+        elif period == '90days':
+            start_date = now - timedelta(days=90)
+        elif period == '1year':
+            start_date = now - timedelta(days=365)
+        else:  # default 30days
+            start_date = now - timedelta(days=30)
+        
+        # Registrations by day
+        registrations_by_day = []
+        for i in range((now.date() - start_date.date()).days + 1):
+            date = start_date.date() + timedelta(days=i)
+            count = Member.objects.filter(
+                created_at__date=date
+            ).count()
+            registrations_by_day.append({
+                'date': date.isoformat(),
+                'count': count
+            })
+        
+        # Activity by day (transactions)
+        activity_by_day = []
+        for i in range((now.date() - start_date.date()).days + 1):
+            date = start_date.date() + timedelta(days=i)
+            transactions = Transaction.objects.filter(
+                created_at__date=date
+            )
+            activity_by_day.append({
+                'date': date.isoformat(),
+                'transactions_count': transactions.count(),
+                'total_amount': float(transactions.aggregate(total=Sum('amount'))['total'] or 0)
+            })
+        
+        # Top referrers
+        top_referrers = []
+        referrers = Member.objects.annotate(
+            referrals_count=Count('descendant_relations')
+        ).filter(referrals_count__gt=0).order_by('-referrals_count')[:10]
+        
+        for referrer in referrers:
+            total_earnings = Transaction.objects.filter(
+                user=referrer,
+                transaction_type__in=['referral_bonus', 'depth_bonus', 'deposit_percent']
+            ).aggregate(total=Sum('amount'))['total'] or 0
+            
+            top_referrers.append({
+                'user_id': referrer.id,
+                'username': referrer.username,
+                'first_name': referrer.first_name,
+                'user_type': referrer.user_type,
+                'referrals_count': referrer.referrals_count,
+                'total_earnings': float(total_earnings)
+            })
+        
+        analytics = {
+            'registrations_by_day': registrations_by_day,
+            'activity_by_day': activity_by_day,
+            'top_referrers': top_referrers
+        }
+        
+        return Response(analytics, status=status.HTTP_200_OK)
 
 
 class HelloView(APIView):

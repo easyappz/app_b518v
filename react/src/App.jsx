@@ -10,6 +10,7 @@ import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
 import ReferralRegister from './components/Auth/ReferralRegister';
 import PlayerDashboard from './components/Dashboard/PlayerDashboard';
+import InfluencerDashboard from './components/Dashboard/InfluencerDashboard';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,8 +35,10 @@ function App() {
         '/r/:referralCode',
         '/home',
         '/dashboard',
+        '/dashboard/influencer',
         '/referral-tree',
-        '/transactions'
+        '/transactions',
+        '/withdrawals'
       ]);
     }
   }, []);
@@ -51,6 +54,7 @@ function App() {
           <Route path="/r/:referralCode" element={<ReferralRegister />} />
           <Route path="/home" element={<Home />} />
           <Route path="/dashboard" element={<PlayerDashboard />} />
+          <Route path="/dashboard/influencer" element={<InfluencerDashboard />} />
         </Routes>
       </QueryClientProvider>
     </ErrorBoundary>

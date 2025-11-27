@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getNotifications, markNotificationAsRead } from '../api/notifications';
+import { getNotifications, markAsRead } from '../api/notifications';
 
 const useNotificationStore = create((set, get) => ({
   notifications: [],
@@ -31,7 +31,7 @@ const useNotificationStore = create((set, get) => ({
 
   markAsRead: async (id) => {
     try {
-      const updatedNotification = await markNotificationAsRead(id);
+      const updatedNotification = await markAsRead(id);
       
       set((state) => {
         const notifications = state.notifications.map(n => 

@@ -193,7 +193,8 @@ class Withdrawal(models.Model):
     
     STATUS_CHOICES = [
         ('pending', 'Pending'),
-        ('approved', 'Approved'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
         ('rejected', 'Rejected'),
     ]
     
@@ -210,6 +211,8 @@ class Withdrawal(models.Model):
         choices=STATUS_CHOICES,
         default='pending'
     )
+    rejection_reason = models.TextField(null=True, blank=True)
+    transaction_id = models.CharField(max_length=255, null=True, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
     processed_at = models.DateTimeField(null=True, blank=True)
@@ -230,9 +233,12 @@ class Notification(models.Model):
     """User notifications"""
     
     NOTIFICATION_TYPE_CHOICES = [
-        ('bonus', 'Bonus'),
-        ('rank_up', 'Rank Up'),
-        ('withdrawal', 'Withdrawal'),
+        ('referral_bonus', 'Referral Bonus'),
+        ('tournament_bonus', 'Tournament Bonus'),
+        ('deposit_bonus', 'Deposit Bonus'),
+        ('withdrawal_approved', 'Withdrawal Approved'),
+        ('withdrawal_rejected', 'Withdrawal Rejected'),
+        ('rank_upgrade', 'Rank Upgrade'),
         ('system', 'System'),
     ]
     
@@ -244,10 +250,11 @@ class Notification(models.Model):
     title = models.CharField(max_length=255)
     message = models.TextField()
     notification_type = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=NOTIFICATION_TYPE_CHOICES
     )
     is_read = models.BooleanField(default=False)
+    data = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:

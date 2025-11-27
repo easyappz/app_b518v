@@ -25,9 +25,13 @@ from .serializers import (
     ReferralSerializer,
     ReferralTreeSerializer,
     TransactionSerializer,
-    TransactionFilterSerializer
+    TransactionFilterSerializer,
+    WithdrawalSerializer,
+    WithdrawalCreateSerializer,
+    NotificationSerializer,
+    PushSubscriptionSerializer
 )
-from .models import Member, Transaction, ReferralRelation, Notification
+from .models import Member, Transaction, ReferralRelation, Notification, Withdrawal, PushSubscription
 
 # Constants for bonus calculation
 PLAYER_DIRECT_BONUS = 1000  # V-Coins
@@ -169,7 +173,7 @@ def check_rank_upgrade(user):
             user=user,
             title='Rank Upgrade',
             message=f'Congratulations! Your rank has been upgraded from {old_rank} to {new_rank}',
-            notification_type='rank_up'
+            notification_type='rank_upgrade'
         )
 
 
@@ -186,7 +190,7 @@ def get_depth_bonus_amount(user_type, rank, level):
         return DEPTH_BONUSES_PLAYER.get(rank, 0)
 
 
-def create_notification(user, title, message, notification_type):
+def create_notification(user, title, message, notification_type, data=None):
     """
     Create notification for user
     
@@ -194,7 +198,8 @@ def create_notification(user, title, message, notification_type):
         user: Member instance
         title: Notification title
         message: Notification message
-        notification_type: Type of notification (bonus, rank_up, withdrawal, system)
+        notification_type: Type of notification
+        data: Additional notification data (optional)
     
     Returns:
         Notification instance
@@ -203,7 +208,8 @@ def create_notification(user, title, message, notification_type):
         user=user,
         title=title,
         message=message,
-        notification_type=notification_type
+        notification_type=notification_type,
+        data=data or {}
     )
 
 
@@ -587,7 +593,7 @@ class RegisterWithReferralView(APIView):
                     user=referrer,
                     title='New Referral',
                     message=f'{new_user.first_name} joined using your referral link! You received {bonus_amount} {"₽" if currency_type == "cash" else "V-Coins"}',
-                    notification_type='bonus'
+                    notification_type='referral_bonus'
                 )
                 
                 # Check rank upgrade for referrer
@@ -1039,7 +1045,7 @@ class FirstTournamentCompletedView(APIView):
                         user=ancestor,
                         title='Tournament Bonus',
                         message=f'{user.first_name} completed their first tournament! You received {bonus_amount} {"₽" if currency_type == "cash" else "V-Coins"}',
-                        notification_type='bonus'
+                        notification_type='tournament_bonus'
                     )
                     
                     bonuses_distributed.append({
@@ -1083,7 +1089,7 @@ class FirstTournamentCompletedView(APIView):
                             user=ancestor,
                             title='Depth Bonus',
                             message=f'Level {level} referral {user.first_name} completed first tournament! You received {bonus_amount} {"₽" if currency_type == "cash" else "V-Coins"}',
-                            notification_type='bonus'
+                            notification_type='tournament_bonus'
                         )
                         
                         bonuses_distributed.append({
@@ -1194,7 +1200,7 @@ class DepositProcessedView(APIView):
                         user=referrer,
                         title='Deposit Bonus',
                         message=f'{user.first_name} made a deposit of {amount}₽! You received {bonus_amount}₽ (10%)',
-                        notification_type='bonus'
+                        notification_type='deposit_bonus'
                     )
                     
                     bonuses_distributed.append({
@@ -1215,6 +1221,318 @@ class DepositProcessedView(APIView):
             'deposit_id': deposit_id,
             'amount': str(amount),
             'bonuses_distributed': bonuses_distributed
+        }, status=status.HTTP_200_OK)
+
+
+class WithdrawalCreateView(APIView):
+    """
+    Create withdrawal request
+    POST /api/withdrawals
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        request=WithdrawalCreateSerializer,
+        responses={201: WithdrawalSerializer}
+    )
+    def post(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Check if user is influencer
+        if request.user.user_type != 'influencer':
+            return Response(
+                {'detail': 'Only influencers can withdraw funds'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = WithdrawalCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {'detail': 'Invalid request data'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        amount = serializer.validated_data['amount']
+        method = serializer.validated_data['method']
+        wallet_address = serializer.validated_data['wallet_address']
+        
+        # Check sufficient balance
+        if request.user.cash_balance < amount:
+            return Response(
+                {'detail': 'Insufficient balance'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create withdrawal request
+        withdrawal = Withdrawal.objects.create(
+            user=request.user,
+            amount=amount,
+            method=method,
+            wallet_address=wallet_address,
+            status='pending'
+        )
+        
+        response_serializer = WithdrawalSerializer(withdrawal)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class WithdrawalListView(APIView):
+    """
+    Get list of withdrawal requests for current user
+    GET /api/withdrawals
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        responses={200: WithdrawalSerializer(many=True)}
+    )
+    def get(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Get query parameters
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        status_filter = request.query_params.get('status')
+        
+        # Validate page_size
+        if page_size < 1:
+            page_size = 20
+        if page_size > 100:
+            page_size = 100
+        
+        # Build query
+        queryset = Withdrawal.objects.filter(user=request.user)
+        
+        # Apply status filter
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        # Order by date (newest first)
+        queryset = queryset.order_by('-created_at')
+        
+        # Get total count
+        total_count = queryset.count()
+        
+        # Calculate pagination
+        start_index = (page - 1) * page_size
+        end_index = start_index + page_size
+        
+        # Get paginated results
+        withdrawals = queryset[start_index:end_index]
+        
+        # Serialize data
+        serializer = WithdrawalSerializer(withdrawals, many=True)
+        
+        # Build pagination URLs
+        base_url = request.build_absolute_uri(request.path)
+        next_url = None
+        previous_url = None
+        
+        if end_index < total_count:
+            next_url = f"{base_url}?page={page + 1}&page_size={page_size}"
+        
+        if page > 1:
+            previous_url = f"{base_url}?page={page - 1}&page_size={page_size}"
+        
+        return Response({
+            'count': total_count,
+            'next': next_url,
+            'previous': previous_url,
+            'results': serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+class WithdrawalDetailView(APIView):
+    """
+    Get withdrawal request details
+    GET /api/withdrawals/{id}
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        responses={200: WithdrawalSerializer}
+    )
+    def get(self, request, id):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        try:
+            withdrawal = Withdrawal.objects.get(id=id)
+        except Withdrawal.DoesNotExist:
+            return Response(
+                {'detail': 'Withdrawal not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if user owns this withdrawal
+        if withdrawal.user.id != request.user.id:
+            return Response(
+                {'detail': 'Access denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = WithdrawalSerializer(withdrawal)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class NotificationListView(APIView):
+    """
+    Get list of notifications for current user
+    GET /api/notifications
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        responses={200: NotificationSerializer(many=True)}
+    )
+    def get(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Get query parameters
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        is_read = request.query_params.get('is_read')
+        
+        # Validate page_size
+        if page_size < 1:
+            page_size = 20
+        if page_size > 100:
+            page_size = 100
+        
+        # Build query
+        queryset = Notification.objects.filter(user=request.user)
+        
+        # Apply is_read filter
+        if is_read is not None:
+            if is_read.lower() in ['true', '1', 'yes']:
+                queryset = queryset.filter(is_read=True)
+            elif is_read.lower() in ['false', '0', 'no']:
+                queryset = queryset.filter(is_read=False)
+        
+        # Order by date (newest first)
+        queryset = queryset.order_by('-created_at')
+        
+        # Get total count
+        total_count = queryset.count()
+        
+        # Calculate pagination
+        start_index = (page - 1) * page_size
+        end_index = start_index + page_size
+        
+        # Get paginated results
+        notifications = queryset[start_index:end_index]
+        
+        # Serialize data
+        serializer = NotificationSerializer(notifications, many=True)
+        
+        # Build pagination URLs
+        base_url = request.build_absolute_uri(request.path)
+        next_url = None
+        previous_url = None
+        
+        if end_index < total_count:
+            next_url = f"{base_url}?page={page + 1}&page_size={page_size}"
+        
+        if page > 1:
+            previous_url = f"{base_url}?page={page - 1}&page_size={page_size}"
+        
+        return Response({
+            'count': total_count,
+            'next': next_url,
+            'previous': previous_url,
+            'results': serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+class NotificationReadView(APIView):
+    """
+    Mark notification as read
+    PATCH /api/notifications/{id}/read
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        responses={200: NotificationSerializer}
+    )
+    def patch(self, request, id):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        try:
+            notification = Notification.objects.get(id=id)
+        except Notification.DoesNotExist:
+            return Response(
+                {'detail': 'Notification not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if user owns this notification
+        if notification.user.id != request.user.id:
+            return Response(
+                {'detail': 'Access denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Mark as read
+        notification.is_read = True
+        notification.save(update_fields=['is_read'])
+        
+        serializer = NotificationSerializer(notification)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class PushSubscribeView(APIView):
+    """
+    Subscribe to push notifications
+    POST /api/notifications/push-subscribe
+    """
+    authentication_classes = [CookieAuthentication]
+    
+    @extend_schema(
+        request=PushSubscriptionSerializer,
+        responses={200: {'type': 'object'}}
+    )
+    def post(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        serializer = PushSubscriptionSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        
+        if not serializer.is_valid():
+            return Response(
+                {'detail': 'Invalid subscription data'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        subscription = serializer.save()
+        
+        return Response({
+            'message': 'Subscribed to push notifications successfully',
+            'subscription_id': subscription.id
         }, status=status.HTTP_200_OK)
 
 

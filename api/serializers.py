@@ -161,6 +161,7 @@ class TransactionFilterSerializer(serializers.Serializer):
 
 class WithdrawalSerializer(serializers.ModelSerializer):
     """Withdrawal request serializer"""
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
     rejection_reason = serializers.CharField(read_only=True, allow_null=True)
     transaction_id = serializers.CharField(read_only=True, allow_null=True)
     
@@ -178,7 +179,7 @@ class WithdrawalSerializer(serializers.ModelSerializer):
             'processed_at',
             'transaction_id'
         ]
-        read_only_fields = ['id', 'user_id', 'status', 'created_at', 'processed_at']
+        read_only_fields = ['id', 'user_id', 'status', 'created_at', 'processed_at', 'rejection_reason', 'transaction_id']
 
 
 class WithdrawalCreateSerializer(serializers.ModelSerializer):
@@ -190,6 +191,11 @@ class WithdrawalCreateSerializer(serializers.ModelSerializer):
     def validate_amount(self, value):
         if value <= 0:
             raise serializers.ValidationError("Amount must be greater than 0")
+        return value
+    
+    def validate_method(self, value):
+        if value not in ['card', 'crypto']:
+            raise serializers.ValidationError("Method must be 'card' or 'crypto'")
         return value
 
 

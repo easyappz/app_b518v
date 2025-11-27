@@ -14,6 +14,12 @@ from .views import (
     TransactionListView,
     FirstTournamentCompletedView,
     DepositProcessedView,
+    WithdrawalCreateView,
+    WithdrawalListView,
+    WithdrawalDetailView,
+    NotificationListView,
+    NotificationReadView,
+    PushSubscribeView,
 )
 
 urlpatterns = [
@@ -39,4 +45,14 @@ urlpatterns = [
     path('transactions', TransactionListView.as_view(), name='transaction-list'),
     path('tournament/first-completed', FirstTournamentCompletedView.as_view(), name='first-tournament-completed'),
     path('deposit/processed', DepositProcessedView.as_view(), name='deposit-processed'),
+    
+    # Withdrawals
+    path('withdrawals', WithdrawalCreateView.as_view(), name='withdrawal-create'),
+    path('withdrawals', WithdrawalListView.as_view(), name='withdrawal-list'),
+    path('withdrawals/<int:id>', WithdrawalDetailView.as_view(), name='withdrawal-detail'),
+    
+    # Notifications
+    path('notifications', NotificationListView.as_view(), name='notification-list'),
+    path('notifications/<int:id>/read', NotificationReadView.as_view(), name='notification-read'),
+    path('notifications/push-subscribe', PushSubscribeView.as_view(), name='push-subscribe'),
 ]

@@ -5,6 +5,7 @@ import ErrorBoundary from './ErrorBoundary';
 import './App.css';
 
 import { Home } from './components/Home';
+import Landing from './components/Landing';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,7 +22,7 @@ function App() {
   useEffect(() => {
     if (typeof window !== 'undefined' && typeof window.handleRoutes === 'function') {
       /** Нужно передавать список существующих роутов */
-      window.handleRoutes(['/']);
+      window.handleRoutes(['/', '/landing']);
     }
   }, []);
 
@@ -29,7 +30,9 @@ function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Landing />} />
+          <Route path="/landing" element={<Landing />} />
+          <Route path="/home" element={<Home />} />
         </Routes>
       </QueryClientProvider>
     </ErrorBoundary>

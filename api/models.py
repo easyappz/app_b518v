@@ -12,10 +12,11 @@ class Member(models.Model):
     ]
     
     RANK_CHOICES = [
-        ('standard', 'Standard'),
+        ('bronze', 'Bronze'),
         ('silver', 'Silver'),
         ('gold', 'Gold'),
         ('platinum', 'Platinum'),
+        ('diamond', 'Diamond'),
     ]
     
     telegram_id = models.BigIntegerField(unique=True, db_index=True)
@@ -41,7 +42,7 @@ class Member(models.Model):
     rank = models.CharField(
         max_length=20,
         choices=RANK_CHOICES,
-        default='standard'
+        default='bronze'
     )
     
     v_coins_balance = models.DecimalField(
@@ -66,6 +67,7 @@ class Member(models.Model):
     is_blocked = models.BooleanField(default=False)
     
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'members'
@@ -196,6 +198,7 @@ class Withdrawal(models.Model):
         ('processing', 'Processing'),
         ('completed', 'Completed'),
         ('rejected', 'Rejected'),
+        ('approved', 'Approved'),
     ]
     
     user = models.ForeignKey(

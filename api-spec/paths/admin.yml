@@ -1,0 +1,853 @@
+paths:
+  /api/admin/users:
+    get:
+      summary: Get all users list
+      description: Get list of all users with filters and pagination for admin
+      tags:
+        - Admin
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: user_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [player, influencer]
+          description: Filter by user type
+        - name: rank
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [bronze, silver, gold, platinum, diamond]
+          description: Filter by rank
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Search by username, first_name, last_name, telegram_id
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: page_size
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Items per page
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    example: 100
+                  next:
+                    type: string
+                    nullable: true
+                    example: "http://localhost:8000/api/admin/users?page=2"
+                  previous:
+                    type: string
+                    nullable: true
+                    example: null
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 1
+                        telegram_id:
+                          type: integer
+                          example: 123456789
+                        username:
+                          type: string
+                          nullable: true
+                          example: "john_doe"
+                        first_name:
+                          type: string
+                          example: "John"
+                        last_name:
+                          type: string
+                          nullable: true
+                          example: "Doe"
+                        photo_url:
+                          type: string
+                          nullable: true
+                          example: "https://example.com/photo.jpg"
+                        user_type:
+                          type: string
+                          enum: [player, influencer]
+                          example: "player"
+                        rank:
+                          type: string
+                          enum: [bronze, silver, gold, platinum, diamond]
+                          example: "bronze"
+                        v_coins_balance:
+                          type: number
+                          format: float
+                          example: 1000.50
+                        cash_balance:
+                          type: number
+                          format: float
+                          example: 500.00
+                        is_blocked:
+                          type: boolean
+                          example: false
+                        referral_code:
+                          type: string
+                          example: "ABC123XYZ"
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/admin/users/{user_id}:
+    get:
+      summary: Get user details
+      description: Get detailed information about specific user for admin
+      tags:
+        - Admin
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: User ID
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  telegram_id:
+                    type: integer
+                    example: 123456789
+                  username:
+                    type: string
+                    nullable: true
+                    example: "john_doe"
+                  first_name:
+                    type: string
+                    example: "John"
+                  last_name:
+                    type: string
+                    nullable: true
+                    example: "Doe"
+                  photo_url:
+                    type: string
+                    nullable: true
+                    example: "https://example.com/photo.jpg"
+                  user_type:
+                    type: string
+                    enum: [player, influencer]
+                    example: "player"
+                  rank:
+                    type: string
+                    enum: [bronze, silver, gold, platinum, diamond]
+                    example: "bronze"
+                  v_coins_balance:
+                    type: number
+                    format: float
+                    example: 1000.50
+                  cash_balance:
+                    type: number
+                    format: float
+                    example: 500.00
+                  is_blocked:
+                    type: boolean
+                    example: false
+                  referral_code:
+                    type: string
+                    example: "ABC123XYZ"
+                  referred_by:
+                    type: object
+                    nullable: true
+                    properties:
+                      id:
+                        type: integer
+                        example: 2
+                      username:
+                        type: string
+                        nullable: true
+                        example: "referrer_user"
+                      first_name:
+                        type: string
+                        example: "Jane"
+                  total_referrals:
+                    type: integer
+                    example: 10
+                  total_earnings:
+                    type: number
+                    format: float
+                    example: 5000.00
+                  created_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+                  updated_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-20T15:45:00Z"
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+    patch:
+      summary: Update user
+      description: Edit user data by admin
+      tags:
+        - Admin
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: User ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_type:
+                  type: string
+                  enum: [player, influencer]
+                  example: "influencer"
+                rank:
+                  type: string
+                  enum: [bronze, silver, gold, platinum, diamond]
+                  example: "gold"
+                v_coins_balance:
+                  type: number
+                  format: float
+                  example: 2000.00
+                cash_balance:
+                  type: number
+                  format: float
+                  example: 1000.00
+                is_blocked:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  telegram_id:
+                    type: integer
+                    example: 123456789
+                  username:
+                    type: string
+                    nullable: true
+                    example: "john_doe"
+                  first_name:
+                    type: string
+                    example: "John"
+                  last_name:
+                    type: string
+                    nullable: true
+                    example: "Doe"
+                  user_type:
+                    type: string
+                    enum: [player, influencer]
+                    example: "influencer"
+                  rank:
+                    type: string
+                    enum: [bronze, silver, gold, platinum, diamond]
+                    example: "gold"
+                  v_coins_balance:
+                    type: number
+                    format: float
+                    example: 2000.00
+                  cash_balance:
+                    type: number
+                    format: float
+                    example: 1000.00
+                  is_blocked:
+                    type: boolean
+                    example: false
+                  updated_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-20T15:45:00Z"
+        '400':
+          description: Invalid data
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/admin/transactions:
+    get:
+      summary: Get all transactions
+      description: Get all system transactions with filters for admin
+      tags:
+        - Admin
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Filter by user ID
+        - name: transaction_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [referral_bonus, tournament_bonus, deposit_bonus, withdrawal]
+          description: Filter by transaction type
+        - name: currency
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [v_coins, cash]
+          description: Filter by currency
+        - name: date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Filter from date (YYYY-MM-DD)
+        - name: date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Filter to date (YYYY-MM-DD)
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: page_size
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Items per page
+      responses:
+        '200':
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    example: 500
+                  next:
+                    type: string
+                    nullable: true
+                    example: "http://localhost:8000/api/admin/transactions?page=2"
+                  previous:
+                    type: string
+                    nullable: true
+                    example: null
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 1
+                        user:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                              example: 1
+                            username:
+                              type: string
+                              nullable: true
+                              example: "john_doe"
+                            first_name:
+                              type: string
+                              example: "John"
+                        transaction_type:
+                          type: string
+                          enum: [referral_bonus, tournament_bonus, deposit_bonus, withdrawal]
+                          example: "referral_bonus"
+                        amount:
+                          type: number
+                          format: float
+                          example: 100.00
+                        currency:
+                          type: string
+                          enum: [v_coins, cash]
+                          example: "v_coins"
+                        description:
+                          type: string
+                          example: "Referral bonus from user registration"
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/admin/withdrawals:
+    get:
+      summary: Get all withdrawal requests
+      description: Get all withdrawal requests with filters for admin
+      tags:
+        - Admin
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+          description: Filter by status
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Filter by user ID
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: page_size
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Items per page
+      responses:
+        '200':
+          description: List of withdrawal requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    example: 50
+                  next:
+                    type: string
+                    nullable: true
+                    example: "http://localhost:8000/api/admin/withdrawals?page=2"
+                  previous:
+                    type: string
+                    nullable: true
+                    example: null
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 1
+                        user:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                              example: 1
+                            username:
+                              type: string
+                              nullable: true
+                              example: "john_doe"
+                            first_name:
+                              type: string
+                              example: "John"
+                            user_type:
+                              type: string
+                              example: "influencer"
+                        amount:
+                          type: number
+                          format: float
+                          example: 1000.00
+                        payment_method:
+                          type: string
+                          example: "bank_card"
+                        payment_details:
+                          type: string
+                          example: "1234 5678 9012 3456"
+                        status:
+                          type: string
+                          enum: [pending, approved, rejected]
+                          example: "pending"
+                        rejection_reason:
+                          type: string
+                          nullable: true
+                          example: null
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+                        updated_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/admin/withdrawals/{id}:
+    patch:
+      summary: Update withdrawal request status
+      description: Approve or reject withdrawal request by admin
+      tags:
+        - Admin
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Withdrawal request ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [approved, rejected]
+                  example: "approved"
+                rejection_reason:
+                  type: string
+                  nullable: true
+                  example: "Insufficient documentation"
+              required:
+                - status
+      responses:
+        '200':
+          description: Withdrawal request updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  user_id:
+                    type: integer
+                    example: 1
+                  amount:
+                    type: number
+                    format: float
+                    example: 1000.00
+                  payment_method:
+                    type: string
+                    example: "bank_card"
+                  payment_details:
+                    type: string
+                    example: "1234 5678 9012 3456"
+                  status:
+                    type: string
+                    enum: [pending, approved, rejected]
+                    example: "approved"
+                  rejection_reason:
+                    type: string
+                    nullable: true
+                    example: null
+                  created_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+                  updated_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T11:00:00Z"
+        '400':
+          description: Invalid data
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '404':
+          description: Withdrawal request not found
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/admin/stats:
+    get:
+      summary: Get system statistics
+      description: Get overall system statistics for admin
+      tags:
+        - Admin
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: System statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_users:
+                    type: integer
+                    example: 1000
+                  total_players:
+                    type: integer
+                    example: 950
+                  total_influencers:
+                    type: integer
+                    example: 50
+                  total_v_coins:
+                    type: number
+                    format: float
+                    example: 500000.00
+                  total_cash_payouts:
+                    type: number
+                    format: float
+                    example: 100000.00
+                  total_transactions:
+                    type: integer
+                    example: 5000
+                  pending_withdrawals:
+                    type: integer
+                    example: 10
+                  pending_withdrawals_amount:
+                    type: number
+                    format: float
+                    example: 25000.00
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/admin/analytics:
+    get:
+      summary: Get system analytics
+      description: Get analytics data for admin (registrations, activity, top referrers)
+      tags:
+        - Admin
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [7days, 30days, 90days, 1year]
+            default: 30days
+          description: Analytics period
+      responses:
+        '200':
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  registrations_by_day:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          format: date
+                          example: "2024-01-15"
+                        count:
+                          type: integer
+                          example: 25
+                  activity_by_day:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          format: date
+                          example: "2024-01-15"
+                        transactions_count:
+                          type: integer
+                          example: 150
+                        total_amount:
+                          type: number
+                          format: float
+                          example: 5000.00
+                  top_referrers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        user_id:
+                          type: integer
+                          example: 1
+                        username:
+                          type: string
+                          nullable: true
+                          example: "john_doe"
+                        first_name:
+                          type: string
+                          example: "John"
+                        user_type:
+                          type: string
+                          example: "influencer"
+                        referrals_count:
+                          type: integer
+                          example: 100
+                        total_earnings:
+                          type: number
+                          format: float
+                          example: 50000.00
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'

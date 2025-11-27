@@ -1,0 +1,216 @@
+paths:
+  /api/notifications:
+    get:
+      summary: Get user notifications
+      description: Get list of notifications for authenticated user
+      tags:
+        - Notifications
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: is_read
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Filter by read status
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: page_size
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Items per page
+      responses:
+        '200':
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    example: 50
+                  next:
+                    type: string
+                    nullable: true
+                    example: "http://localhost:8000/api/notifications?page=2"
+                  previous:
+                    type: string
+                    nullable: true
+                    example: null
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 1
+                        title:
+                          type: string
+                          example: "New referral bonus"
+                        message:
+                          type: string
+                          example: "You earned 100 V-Coins from your referral"
+                        notification_type:
+                          type: string
+                          enum: [referral_bonus, tournament_bonus, deposit_bonus, withdrawal_approved, withdrawal_rejected, rank_upgrade, system]
+                          example: "referral_bonus"
+                        is_read:
+                          type: boolean
+                          example: false
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+                        data:
+                          type: object
+                          nullable: true
+                          description: Additional notification data
+                          example:
+                            transaction_id: 123
+                            amount: 100.00
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/notifications/{id}/read:
+    patch:
+      summary: Mark notification as read
+      description: Mark specific notification as read
+      tags:
+        - Notifications
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Notification ID
+      responses:
+        '200':
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  title:
+                    type: string
+                    example: "New referral bonus"
+                  message:
+                    type: string
+                    example: "You earned 100 V-Coins from your referral"
+                  notification_type:
+                    type: string
+                    enum: [referral_bonus, tournament_bonus, deposit_bonus, withdrawal_approved, withdrawal_rejected, rank_upgrade, system]
+                    example: "referral_bonus"
+                  is_read:
+                    type: boolean
+                    example: true
+                  created_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+                  data:
+                    type: object
+                    nullable: true
+                    description: Additional notification data
+                    example:
+                      transaction_id: 123
+                      amount: 100.00
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/notifications/push-subscribe:
+    post:
+      summary: Subscribe to push notifications
+      description: Subscribe user to push notifications
+      tags:
+        - Notifications
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subscription:
+                  type: object
+                  description: Push subscription data from browser
+                  properties:
+                    endpoint:
+                      type: string
+                      example: "https://fcm.googleapis.com/fcm/send/..."
+                    keys:
+                      type: object
+                      properties:
+                        p256dh:
+                          type: string
+                          example: "BNcRd..."
+                        auth:
+                          type: string
+                          example: "tBHItJ..."
+                  required:
+                    - endpoint
+                    - keys
+              required:
+                - subscription
+      responses:
+        '200':
+          description: Subscription created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Subscribed to push notifications successfully"
+                  subscription_id:
+                    type: integer
+                    example: 1
+        '400':
+          description: Invalid subscription data
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'

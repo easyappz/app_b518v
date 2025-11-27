@@ -1,0 +1,228 @@
+paths:
+  /api/users/{user_id}:
+    get:
+      summary: Get user by ID
+      description: Retrieve user information by user ID
+      tags:
+        - Users
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: User data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  telegram_id:
+                    type: integer
+                    example: 123456789
+                  username:
+                    type: string
+                    nullable: true
+                    example: "john_doe"
+                  first_name:
+                    type: string
+                    example: "John"
+                  last_name:
+                    type: string
+                    nullable: true
+                    example: "Doe"
+                  photo_url:
+                    type: string
+                    nullable: true
+                    example: "https://example.com/photo.jpg"
+                  user_type:
+                    type: string
+                    enum: [player, influencer]
+                    example: "player"
+                  referral_code:
+                    type: string
+                    example: "ABC123XYZ"
+                  created_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+    patch:
+      summary: Update user profile
+      description: Update user information (e.g., change user type to influencer)
+      tags:
+        - Users
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_type:
+                  type: string
+                  enum: [player, influencer]
+                  description: User type
+                  example: "influencer"
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  telegram_id:
+                    type: integer
+                    example: 123456789
+                  username:
+                    type: string
+                    nullable: true
+                    example: "john_doe"
+                  first_name:
+                    type: string
+                    example: "John"
+                  last_name:
+                    type: string
+                    nullable: true
+                    example: "Doe"
+                  photo_url:
+                    type: string
+                    nullable: true
+                    example: "https://example.com/photo.jpg"
+                  user_type:
+                    type: string
+                    enum: [player, influencer]
+                    example: "influencer"
+                  referral_code:
+                    type: string
+                    example: "ABC123XYZ"
+                  created_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '403':
+          description: Permission denied
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/users/{user_id}/stats:
+    get:
+      summary: Get user statistics
+      description: Get user statistics including balance, rank, and referral count
+      tags:
+        - Users
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: User statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: integer
+                    example: 1
+                  balance:
+                    type: number
+                    format: float
+                    description: User balance (V-Coins for players, rubles for influencers)
+                    example: 1500.50
+                  rank:
+                    type: string
+                    description: User rank in the system
+                    example: "Gold"
+                  referral_count:
+                    type: integer
+                    description: Total number of referrals
+                    example: 25
+                  total_earnings:
+                    type: number
+                    format: float
+                    description: Total earnings from referrals
+                    example: 5000.00
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '403':
+          description: Permission denied
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'

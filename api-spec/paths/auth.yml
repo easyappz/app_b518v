@@ -1,0 +1,191 @@
+paths:
+  /api/auth/telegram:
+    post:
+      summary: Authenticate user via Telegram
+      description: Authenticate or register user using Telegram data
+      tags:
+        - Authentication
+      x-isSecure: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                telegram_id:
+                  type: integer
+                  description: Telegram user ID
+                  example: 123456789
+                username:
+                  type: string
+                  description: Telegram username
+                  example: "john_doe"
+                  nullable: true
+                first_name:
+                  type: string
+                  description: User's first name
+                  example: "John"
+                last_name:
+                  type: string
+                  description: User's last name
+                  example: "Doe"
+                  nullable: true
+                photo_url:
+                  type: string
+                  description: URL to user's photo
+                  example: "https://example.com/photo.jpg"
+                  nullable: true
+                auth_date:
+                  type: integer
+                  description: Authentication timestamp
+                  example: 1234567890
+                hash:
+                  type: string
+                  description: Telegram auth hash
+                  example: "abcdef1234567890"
+              required:
+                - telegram_id
+                - first_name
+                - auth_date
+                - hash
+      responses:
+        '200':
+          description: Successful authentication
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: sessionid=abc123; HttpOnly; Path=/; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  telegram_id:
+                    type: integer
+                    example: 123456789
+                  username:
+                    type: string
+                    nullable: true
+                    example: "john_doe"
+                  first_name:
+                    type: string
+                    example: "John"
+                  last_name:
+                    type: string
+                    nullable: true
+                    example: "Doe"
+                  photo_url:
+                    type: string
+                    nullable: true
+                    example: "https://example.com/photo.jpg"
+                  user_type:
+                    type: string
+                    enum: [player, influencer]
+                    example: "player"
+                  referral_code:
+                    type: string
+                    example: "ABC123XYZ"
+                  created_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+        '401':
+          description: Invalid Telegram authentication
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/auth/logout:
+    post:
+      summary: Logout current user
+      description: Logout user and clear session cookie
+      tags:
+        - Authentication
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Successful logout
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Logged out successfully"
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/auth/me:
+    get:
+      summary: Get current user
+      description: Get authenticated user information
+      tags:
+        - Authentication
+      x-isSecure: true
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Current user data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  telegram_id:
+                    type: integer
+                    example: 123456789
+                  username:
+                    type: string
+                    nullable: true
+                    example: "john_doe"
+                  first_name:
+                    type: string
+                    example: "John"
+                  last_name:
+                    type: string
+                    nullable: true
+                    example: "Doe"
+                  photo_url:
+                    type: string
+                    nullable: true
+                    example: "https://example.com/photo.jpg"
+                  user_type:
+                    type: string
+                    enum: [player, influencer]
+                    example: "player"
+                  referral_code:
+                    type: string
+                    example: "ABC123XYZ"
+                  created_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'

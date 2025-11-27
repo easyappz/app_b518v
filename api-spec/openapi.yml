@@ -1,0 +1,38 @@
+openapi: 3.0.3
+info:
+  title: Poker Chain Referral API
+  version: 1.0.0
+  description: API for Poker Chain referral system with Telegram authorization
+
+servers:
+  - url: http://localhost:8000
+    description: Development server
+
+paths:
+  /api/auth/telegram:
+    $ref: './paths/auth.yml#/paths/~1api~1auth~1telegram'
+  /api/auth/logout:
+    $ref: './paths/auth.yml#/paths/~1api~1auth~1logout'
+  /api/auth/me:
+    $ref: './paths/auth.yml#/paths/~1api~1auth~1me'
+  /api/users/{user_id}:
+    $ref: './paths/users.yml#/paths/~1api~1users~1{user_id}'
+  /api/users/{user_id}/stats:
+    $ref: './paths/users.yml#/paths/~1api~1users~1{user_id}~1stats'
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+      required:
+        - error

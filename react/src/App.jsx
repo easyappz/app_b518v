@@ -14,6 +14,8 @@ import InfluencerDashboard from './components/Dashboard/InfluencerDashboard';
 import ReferralTree from './components/ReferralTree';
 import Transactions from './components/Transactions';
 import Statistics from './components/Statistics';
+import Notifications from './components/Notifications';
+import NotFound from './components/NotFound';
 import Admin from './components/Admin';
 
 const queryClient = new QueryClient({
@@ -33,23 +35,22 @@ function App() {
       /** Нужно передавать список существующих роутов */
       window.handleRoutes([
         '/',
-        '/landing',
         '/login',
         '/register',
-        '/r/:referralCode',
-        '/home',
+        '/r/:code',
         '/dashboard',
-        '/dashboard/influencer',
-        '/referral-tree',
+        '/referrals',
         '/transactions',
         '/statistics',
-        '/withdrawals',
+        '/notifications',
         '/admin',
+        '/admin/dashboard',
         '/admin/users',
         '/admin/users/:userId',
         '/admin/transactions',
         '/admin/withdrawals',
-        '/admin/analytics'
+        '/admin/analytics',
+        '*'
       ]);
     }
   }, []);
@@ -59,17 +60,16 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <Routes>
           <Route path="/" element={<Landing />} />
-          <Route path="/landing" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/r/:referralCode" element={<ReferralRegister />} />
-          <Route path="/home" element={<Home />} />
+          <Route path="/r/:code" element={<ReferralRegister />} />
           <Route path="/dashboard" element={<PlayerDashboard />} />
-          <Route path="/dashboard/influencer" element={<InfluencerDashboard />} />
-          <Route path="/referral-tree" element={<ReferralTree />} />
+          <Route path="/referrals" element={<ReferralTree />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/statistics" element={<Statistics />} />
+          <Route path="/notifications" element={<Notifications />} />
           <Route path="/admin/*" element={<Admin />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </QueryClientProvider>
     </ErrorBoundary>

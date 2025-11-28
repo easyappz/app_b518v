@@ -1,6 +1,7 @@
 from django.db import models
 import secrets
 import string
+import hashlib
 
 
 class Member(models.Model):
@@ -19,11 +20,12 @@ class Member(models.Model):
         ('diamond', 'Diamond'),
     ]
     
-    telegram_id = models.BigIntegerField(unique=True, db_index=True)
-    username = models.CharField(max_length=255, null=True, blank=True)
+    telegram_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    username = models.CharField(max_length=255, unique=True, db_index=True)
     first_name = models.CharField(max_length=255, default='')
     last_name = models.CharField(max_length=255, default='', blank=True)
     photo_url = models.URLField(max_length=500, null=True, blank=True)
+    password_hash = models.CharField(max_length=255, null=True, blank=True)
     
     referrer = models.ForeignKey(
         'self',
@@ -72,6 +74,13 @@ class Member(models.Model):
     class Meta:
         db_table = 'members'
         ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['telegram_id'],
+                condition=models.Q(telegram_id__isnull=False),
+                name='unique_telegram_id'
+            )
+        ]
     
     def __str__(self):
         return f"{self.username or self.telegram_id} ({self.user_type})"
@@ -93,6 +102,19 @@ class Member(models.Model):
     def has_module_perms(self, app_label):
         """Check if user has permissions to view the app (required for DRF)"""
         return self.is_admin
+    
+    def set_password(self, raw_password):
+        """Hash password and save to password_hash field"""
+        if raw_password:
+            self.password_hash = hashlib.sha256(raw_password.encode()).hexdigest()
+        else:
+            self.password_hash = None
+    
+    def check_password(self, raw_password):
+        """Check if provided password matches stored hash"""
+        if not self.password_hash or not raw_password:
+            return False
+        return self.password_hash == hashlib.sha256(raw_password.encode()).hexdigest()
     
     @staticmethod
     def generate_referral_code():

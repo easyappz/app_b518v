@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../common/Card';
 import Button from '../../common/Button';
-import { loginWithTelegram } from '../../../api/auth';
-import useAuthStore from '../../../store/authStore';
+import Input from '../../common/Input';
+import { login } from '../../../api/auth';
+import { useAuthStore } from '../../../store/authStore';
 import './styles.css';
 
 const Login = () => {
@@ -11,29 +12,45 @@ const Login = () => {
   const setUser = useAuthStore((state) => state.setUser);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [formData, setFormData] = useState({
+    username: '',
+    password: ''
+  });
 
-  const handleTelegramLogin = async () => {
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    setError('');
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setLoading(true);
     setError('');
 
-    try {
-      // Mock Telegram data for demo
-      const mockTelegramData = {
-        telegram_id: Math.floor(Math.random() * 1000000000),
-        username: 'demo_user',
-        first_name: 'Demo',
-        last_name: 'User',
-        photo_url: null,
-        auth_date: Math.floor(Date.now() / 1000),
-        hash: 'mock_hash_' + Math.random().toString(36).substring(7)
-      };
+    // Валидация
+    if (!formData.username.trim()) {
+      setError('Введите имя пользователя');
+      setLoading(false);
+      return;
+    }
 
-      const userData = await loginWithTelegram(mockTelegramData);
+    if (!formData.password) {
+      setError('Введите пароль');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const userData = await login(formData.username, formData.password);
       setUser(userData);
       navigate('/home');
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.response?.data?.error || 'Ошибка авторизации');
+      setError(err.response?.data?.error || 'Неверное имя пользователя или пароль');
     } finally {
       setLoading(false);
     }
@@ -64,16 +81,49 @@ const Login = () => {
             </div>
           )}
 
-          <Button
-            variant="primary"
-            fullWidth
-            onClick={handleTelegramLogin}
-            loading={loading}
-            className="telegram-button"
-          >
-            <span className="telegram-icon">✈️</span>
-            Войти через Telegram
-          </Button>
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label className="form-label" htmlFor="username">
+                Имя пользователя
+              </label>
+              <Input
+                id="username"
+                name="username"
+                type="text"
+                placeholder="Введите имя пользователя"
+                value={formData.username}
+                onChange={handleChange}
+                disabled={loading}
+                autoComplete="username"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="password">
+                Пароль
+              </label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                placeholder="Введите пароль"
+                value={formData.password}
+                onChange={handleChange}
+                disabled={loading}
+                autoComplete="current-password"
+              />
+            </div>
+
+            <Button
+              type="submit"
+              variant="primary"
+              fullWidth
+              loading={loading}
+              className="login-button"
+            >
+              Войти
+            </Button>
+          </form>
 
           <div className="auth-divider">
             <span>или</span>

@@ -18,6 +18,19 @@ class TelegramAuthSerializer(serializers.Serializer):
     hash = serializers.CharField(required=True)
 
 
+class LoginSerializer(serializers.Serializer):
+    """Serializer for username/password login"""
+    username = serializers.CharField(required=True)
+    password = serializers.CharField(required=True, write_only=True)
+
+
+class RegisterSerializer(serializers.Serializer):
+    """Serializer for username/password registration"""
+    username = serializers.CharField(required=True, max_length=150)
+    password = serializers.CharField(required=True, min_length=6, write_only=True)
+    first_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+
 class MemberSerializer(serializers.ModelSerializer):
     """Full information about user"""
     class Meta:

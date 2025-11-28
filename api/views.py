@@ -18,6 +18,8 @@ from decimal import Decimal
 from .serializers import (
     MessageSerializer,
     TelegramAuthSerializer,
+    LoginSerializer,
+    RegisterSerializer,
     MemberSerializer,
     MemberStatsSerializer,
     MemberUpdateSerializer,
@@ -217,10 +219,160 @@ def create_notification(user, title, message, notification_type, data=None):
     )
 
 
+def create_session(user):
+    """
+    Create a session for the user and return session token
+    """
+    # Generate session token
+    session_token = secrets.token_urlsafe(32)
+    
+    # Create session
+    session = Session.objects.create(
+        session_key=session_token,
+        session_data=Session.objects.encode({
+            'user_id': user.id,
+            'created_at': timezone.now().isoformat()
+        }),
+        expire_date=timezone.now() + timezone.timedelta(days=30)
+    )
+    
+    return session_token
+
+
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = 'page_size'
     max_page_size = 100
+
+
+class RegisterView(APIView):
+    """
+    Register new user with username and password
+    POST /api/auth/register
+    """
+    authentication_classes = []
+    permission_classes = []
+    
+    @extend_schema(
+        request=RegisterSerializer,
+        responses={201: MemberSerializer}
+    )
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {'error': 'Invalid request data'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        data = serializer.validated_data
+        username = data['username']
+        password = data['password']
+        first_name = data.get('first_name', '')
+        
+        # Check if username already exists
+        if Member.objects.filter(username=username).exists():
+            return Response(
+                {'error': 'Username already exists'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create new user
+        user = Member.objects.create(
+            username=username,
+            first_name=first_name,
+            user_type='player'
+        )
+        
+        # Set password
+        user.set_password(password)
+        user.save()
+        
+        # Create session
+        session_token = create_session(user)
+        
+        # Prepare response
+        response_serializer = MemberSerializer(user)
+        response = Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        
+        # Set HttpOnly cookie
+        response.set_cookie(
+            key='session_token',
+            value=session_token,
+            httponly=True,
+            samesite='Lax',
+            max_age=60 * 60 * 24 * 30,  # 30 days
+            secure=False  # Set to True in production with HTTPS
+        )
+        
+        return response
+
+
+class LoginView(APIView):
+    """
+    Login with username and password
+    POST /api/auth/login
+    """
+    authentication_classes = []
+    permission_classes = []
+    
+    @extend_schema(
+        request=LoginSerializer,
+        responses={200: MemberSerializer}
+    )
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {'error': 'Invalid request data'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        data = serializer.validated_data
+        username = data['username']
+        password = data['password']
+        
+        # Find user by username
+        try:
+            user = Member.objects.get(username=username)
+        except Member.DoesNotExist:
+            return Response(
+                {'error': 'Invalid username or password'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Check password
+        if not user.check_password(password):
+            return Response(
+                {'error': 'Invalid username or password'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Check if user is blocked
+        if user.is_blocked:
+            return Response(
+                {'error': 'User is blocked'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Create session
+        session_token = create_session(user)
+        
+        # Prepare response
+        response_serializer = MemberSerializer(user)
+        response = Response(response_serializer.data, status=status.HTTP_200_OK)
+        
+        # Set HttpOnly cookie
+        response.set_cookie(
+            key='session_token',
+            value=session_token,
+            httponly=True,
+            samesite='Lax',
+            max_age=60 * 60 * 24 * 30,  # 30 days
+            secure=False  # Set to True in production with HTTPS
+        )
+        
+        return response
 
 
 class TelegramAuthView(APIView):
@@ -264,7 +416,7 @@ class TelegramAuthView(APIView):
         )
         
         # Create session
-        session_token = self.create_session(user)
+        session_token = create_session(user)
         
         # Prepare response
         response_serializer = MemberSerializer(user)
@@ -297,25 +449,6 @@ class TelegramAuthView(APIView):
         # 4. Compare with provided hash
         
         return True
-    
-    def create_session(self, user):
-        """
-        Create a session for the user and return session token
-        """
-        # Generate session token
-        session_token = secrets.token_urlsafe(32)
-        
-        # Create session
-        session = Session.objects.create(
-            session_key=session_token,
-            session_data=Session.objects.encode({
-                'user_id': user.id,
-                'created_at': timezone.now().isoformat()
-            }),
-            expire_date=timezone.now() + timezone.timedelta(days=30)
-        )
-        
-        return session_token
 
 
 class LogoutView(APIView):

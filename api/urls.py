@@ -2,6 +2,8 @@ from django.urls import path
 from .views import (
     HelloView,
     TelegramAuthView,
+    RegisterView,
+    LoginView,
     LogoutView,
     CurrentUserView,
     UserDetailView,
@@ -31,6 +33,8 @@ from .views import (
 urlpatterns = [
     # Auth
     path('auth/telegram', TelegramAuthView.as_view(), name='telegram-auth'),
+    path('auth/register', RegisterView.as_view(), name='register'),
+    path('auth/login', LoginView.as_view(), name='login'),
     path('auth/logout', LogoutView.as_view(), name='logout'),
     path('auth/me', CurrentUserView.as_view(), name='current-user'),
     

@@ -21,6 +21,15 @@ export const markAsRead = async (id) => {
 };
 
 /**
+ * Mark notification as read (alias for compatibility)
+ * @param {number} id - Notification ID
+ * @returns {Promise} Response with updated notification
+ */
+export const markNotificationAsRead = async (id) => {
+  return markAsRead(id);
+};
+
+/**
  * Subscribe to push notifications
  * @param {Object} data - Push subscription data from browser
  * @returns {Promise} Response with subscription confirmation

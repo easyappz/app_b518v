@@ -8,12 +8,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Remove old unique constraint on telegram_id
-        migrations.RemoveConstraint(
-            model_name='member',
-            name='unique_telegram_id',
-        ),
-        
         # Make telegram_id nullable and not unique
         migrations.AlterField(
             model_name='member',
@@ -35,7 +29,7 @@ class Migration(migrations.Migration):
             field=models.CharField(max_length=255, null=True, blank=True),
         ),
         
-        # Add back unique constraint on telegram_id with condition
+        # Add unique constraint on telegram_id with condition
         migrations.AddConstraint(
             model_name='member',
             constraint=models.UniqueConstraint(

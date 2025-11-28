@@ -107,6 +107,138 @@ paths:
               schema:
                 $ref: '../openapi.yml#/components/schemas/Error'
 
+  /api/auth/register:
+    post:
+      summary: Register new user with username and password
+      description: Simple registration with username and password
+      tags:
+        - Authentication
+      x-isSecure: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: Username for login
+                  example: "john_doe"
+                  minLength: 3
+                password:
+                  type: string
+                  description: Password
+                  example: "password123"
+                  minLength: 6
+                first_name:
+                  type: string
+                  description: User's first name (optional)
+                  example: "John"
+                  nullable: true
+              required:
+                - username
+                - password
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  username:
+                    type: string
+                    example: "john_doe"
+                  first_name:
+                    type: string
+                    example: "John"
+                  user_type:
+                    type: string
+                    enum: [player, influencer]
+                    example: "player"
+                  referral_code:
+                    type: string
+                    example: "ABC123XYZ"
+                  created_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+        '400':
+          description: Invalid request data or user already exists
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
+  /api/auth/login:
+    post:
+      summary: Login with username and password
+      description: Authenticate user with username and password
+      tags:
+        - Authentication
+      x-isSecure: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: Username
+                  example: "john_doe"
+                password:
+                  type: string
+                  description: Password
+                  example: "password123"
+              required:
+                - username
+                - password
+      responses:
+        '200':
+          description: Login successful
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: session_token=abc123; HttpOnly; Path=/; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  username:
+                    type: string
+                    example: "john_doe"
+                  first_name:
+                    type: string
+                    example: "John"
+                  user_type:
+                    type: string
+                    enum: [player, influencer]
+                    example: "player"
+                  referral_code:
+                    type: string
+                    example: "ABC123XYZ"
+                  created_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+        '401':
+          description: Invalid username or password
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yml#/components/schemas/Error'
+
   /api/auth/logout:
     post:
       summary: Logout current user
@@ -157,6 +289,7 @@ paths:
                   telegram_id:
                     type: integer
                     example: 123456789
+                    nullable: true
                   username:
                     type: string
                     nullable: true

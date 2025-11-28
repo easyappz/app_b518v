@@ -12,6 +12,10 @@ paths:
   # Authentication
   /api/auth/telegram:
     $ref: './paths/auth.yml#/paths/~1api~1auth~1telegram'
+  /api/auth/register:
+    $ref: './paths/auth.yml#/paths/~1api~1auth~1register'
+  /api/auth/login:
+    $ref: './paths/auth.yml#/paths/~1api~1auth~1login'
   /api/auth/logout:
     $ref: './paths/auth.yml#/paths/~1api~1auth~1logout'
   /api/auth/me:
